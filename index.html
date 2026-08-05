@@ -1,0 +1,462 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>NutriLens — AI食事栄養分析アプリ</title>
+  <meta name="description" content="食事の写真を撮るだけでAIがカロリーや栄養素を自動分析。毎日の健康管理をスマートにサポートします。">
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+<!-- ===== App ===== -->
+<div id="app">
+
+  <!-- Header -->
+  <header class="app-header">
+    <div class="logo">
+      <div class="logo-icon">🍱</div>
+      <div>
+        <div class="logo-text">NutriLens</div>
+        <div class="logo-subtitle">AI栄養分析</div>
+      </div>
+    </div>
+    <div class="header-actions">
+      <span id="key-status" class="badge badge-warning" style="font-size:11px">APIキー未設定</span>
+      <button class="btn btn-ghost btn-icon" id="btn-api-settings" title="API設定">⚙️</button>
+    </div>
+  </header>
+
+  <!-- ====== TAB: 撮影・分析 ====== -->
+  <section id="tab-capture" class="tab-panel active">
+    <h1 style="font-size:0;position:absolute">NutriLens - AI食事栄養分析</h1>
+
+    <!-- Upload Section -->
+    <div id="upload-section">
+      <div class="upload-area" id="upload-area" role="button" tabindex="0" aria-label="画像をアップロードまたはドラッグ&amp;ドロップ">
+        <span class="upload-icon">📸</span>
+        <div class="upload-title">食事の写真を追加</div>
+        <div class="upload-subtitle">ドラッグ＆ドロップ、または下のボタンから選択</div>
+        <div class="upload-buttons" onclick="event.stopPropagation()">
+          <button class="btn btn-primary btn-lg" id="btn-camera">
+            📷 カメラで撮影
+          </button>
+          <button class="btn btn-ghost btn-lg" id="btn-upload">
+            🖼️ 画像を選択
+          </button>
+        </div>
+      </div>
+      <input type="file" id="file-input" accept="image/*">
+      <input type="file" id="camera-input" accept="image/*" capture="environment">
+    </div>
+
+    <!-- Preview Section -->
+    <div id="preview-section">
+      <div class="glass-card preview-container">
+        <div class="preview-header">
+          <span class="section-title" style="margin:0"><span class="icon">🖼️</span>プレビュー</span>
+          <button class="btn btn-ghost" id="btn-reset">✕ 選び直す</button>
+        </div>
+        <div class="preview-image-wrapper">
+          <img id="preview-image" src="" alt="プレビュー画像">
+          <div class="preview-overlay"></div>
+        </div>
+        <div class="preview-actions">
+          <button class="btn btn-primary btn-lg" id="btn-analyze" style="flex:1;max-width:320px">
+            🔍 AIで栄養を分析する
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Loading Section -->
+    <div id="loading-section">
+      <div class="glass-card loading-card">
+        <div class="loading-spinner"></div>
+        <div class="loading-text">AIが料理を分析中...</div>
+        <div class="loading-dots">
+          <span></span><span></span><span></span>
+        </div>
+        <div style="margin-top:16px;font-size:12px;color:var(--text-muted)">
+          カロリー・栄養素を計算しています
+        </div>
+      </div>
+    </div>
+
+    <!-- Result Section -->
+    <div id="result-section">
+      <div class="glass-card">
+
+        <!-- Result Header -->
+        <div class="result-header">
+          <div>
+            <div id="result-food-name" class="result-food-name">—</div>
+            <div id="result-food-name-en" class="result-food-name-en"></div>
+            <div style="margin-top:8px;display:flex;gap:8px;align-items:center;flex-wrap:wrap">
+              <span id="result-health-badge" class="badge badge-success">健康スコア —</span>
+              <span id="result-serving" style="font-size:12px;color:var(--text-muted)"></span>
+            </div>
+          </div>
+          <div class="calorie-ring-wrapper">
+            <div class="calorie-ring-container">
+              <svg class="calorie-ring-svg" viewBox="0 0 100 100">
+                <defs>
+                  <linearGradient id="ringGradient" x1="0%" y1="0%" x2="100%" y2="0%">
+                    <stop offset="0%" stop-color="#3dffa0"/>
+                    <stop offset="100%" stop-color="#00e5ff"/>
+                  </linearGradient>
+                </defs>
+                <circle class="calorie-ring-bg" cx="50" cy="50" r="45"/>
+                <circle id="calorie-ring-progress" class="calorie-ring-progress" cx="50" cy="50" r="45"/>
+              </svg>
+              <div class="calorie-ring-center">
+                <div class="calorie-value" id="result-calories">0</div>
+                <div class="calorie-unit">kcal</div>
+              </div>
+            </div>
+            <div style="font-size:11px;color:var(--text-muted);margin-top:2px">カロリー</div>
+          </div>
+        </div>
+
+        <!-- PFC Bars -->
+        <div class="pfc-section">
+          <div class="pfc-title">PFCバランス</div>
+          <div class="pfc-bar-container">
+            <div id="pfc-protein-bar" class="pfc-segment protein" style="width:0%"></div>
+            <div id="pfc-fat-bar"     class="pfc-segment fat"     style="width:0%"></div>
+            <div id="pfc-carbs-bar"   class="pfc-segment carbs"   style="width:0%"></div>
+          </div>
+          <div class="pfc-legend">
+            <div class="pfc-legend-item">
+              <div class="pfc-dot protein"></div>
+              <span class="pfc-label">タンパク質</span>
+              <span class="pfc-amount" id="result-protein">—</span>
+            </div>
+            <div class="pfc-legend-item">
+              <div class="pfc-dot fat"></div>
+              <span class="pfc-label">脂質</span>
+              <span class="pfc-amount" id="result-fat">—</span>
+            </div>
+            <div class="pfc-legend-item">
+              <div class="pfc-dot carbs"></div>
+              <span class="pfc-label">炭水化物</span>
+              <span class="pfc-amount" id="result-carbs">—</span>
+            </div>
+          </div>
+        </div>
+
+        <!-- Nutrients Grid -->
+        <div class="nutrients-section">
+          <div class="pfc-title" style="margin-bottom:14px">栄養素詳細</div>
+          <div class="nutrients-grid" id="nutrients-grid"></div>
+        </div>
+
+        <!-- Per-dish Items Breakdown -->
+        <div id="items-section" style="border-top:1px solid var(--glass-border);">
+          <div class="nutrients-section" style="padding-bottom:8px">
+            <button id="btn-toggle-items" class="items-toggle-btn" onclick="App.toggleItems()">
+              <span class="items-toggle-icon">🍱</span>
+              <span class="items-toggle-label">おかず別内訳を見る</span>
+              <span class="items-toggle-arrow">▼</span>
+            </button>
+            <div id="items-list" style="display:none;margin-top:12px"></div>
+          </div>
+        </div>
+
+        <!-- AI Comment -->
+        <div class="ai-comment">
+          <div class="ai-avatar">🤖</div>
+          <div class="ai-comment-text" id="ai-comment-text">分析を行うとAIからアドバイスが届きます。</div>
+        </div>
+
+
+        <!-- Actions -->
+        <div class="result-actions">
+          <button class="btn btn-primary" id="btn-save-meal" style="flex:1">
+            💾 食事を記録する
+          </button>
+          <button class="btn btn-ghost" id="btn-reanalyze">
+            🔄 別の写真を撮る
+          </button>
+        </div>
+
+      </div>
+    </div>
+
+  </section>
+
+  <!-- ====== TAB: ダッシュボード ====== -->
+  <section id="tab-dashboard" class="tab-panel">
+
+    <div id="dashboard-section">
+      <div class="section-title"><span class="icon">📊</span>今日のサマリー</div>
+
+      <div class="dashboard-grid">
+        <div class="glass-card stat-card">
+          <div class="stat-label">🔥 摂取カロリー</div>
+          <div class="stat-value" id="dash-calories">0</div>
+          <div class="stat-sub">kcal</div>
+          <div class="daily-progress-bar">
+            <div class="daily-progress-fill" id="calorie-progress-fill" style="width:0%"></div>
+          </div>
+          <div class="stat-sub" style="margin-top:6px" id="calorie-progress-label"></div>
+        </div>
+        <div class="glass-card stat-card">
+          <div class="stat-label">🍽️ 食事回数</div>
+          <div class="stat-value" id="dash-meals">0</div>
+          <div class="stat-sub">食</div>
+          <div style="margin-top:8px;font-size:12px;color:var(--text-muted)" id="dash-pfc"></div>
+        </div>
+        <div class="glass-card stat-card">
+          <div class="stat-label">💪 タンパク質</div>
+          <div class="stat-value" id="dash-protein">0g</div>
+          <div class="stat-sub">摂取量</div>
+        </div>
+        <div class="glass-card stat-card">
+          <div class="stat-label">📅 記録数</div>
+          <div class="stat-value" id="dash-total" style="font-size:28px">—</div>
+          <div class="stat-sub">合計食事数</div>
+        </div>
+      </div>
+
+      <!-- Weekly Chart -->
+      <div class="glass-card weekly-chart-card">
+        <div class="section-title" style="margin-bottom:0"><span class="icon">📈</span>週間カロリー推移</div>
+        <div class="chart-container">
+          <canvas id="weekly-chart"></canvas>
+        </div>
+      </div>
+    </div>
+
+  </section>
+
+  <!-- ====== TAB: 履歴 ====== -->
+  <section id="tab-history" class="tab-panel">
+
+    <div id="history-section">
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px">
+        <div class="section-title" style="margin:0"><span class="icon">🗂️</span>食事履歴</div>
+        <button class="btn btn-danger" id="btn-clear-history" style="font-size:13px;padding:8px 14px">
+          🗑️ 全削除
+        </button>
+      </div>
+      <div class="history-list" id="history-list"></div>
+    </div>
+
+  </section>
+
+  <!-- ====== TAB: 設定 ====== -->
+  <section id="tab-settings" class="tab-panel">
+
+    <!-- Goal Settings -->
+    <div id="goal-section">
+      <div class="section-title"><span class="icon">🎯</span>1日の目標設定</div>
+      <div class="glass-card goal-card">
+        <div class="goal-inputs">
+          <div class="form-group">
+            <label class="form-label" for="goal-calories">🔥 目標カロリー (kcal)</label>
+            <input type="number" class="form-input goal-input" id="goal-calories" min="500" max="5000" step="50">
+          </div>
+          <div class="form-group">
+            <label class="form-label" for="goal-protein">💪 タンパク質 (g)</label>
+            <input type="number" class="form-input goal-input" id="goal-protein" min="10" max="300" step="5">
+          </div>
+          <div class="form-group">
+            <label class="form-label" for="goal-fat">🧈 脂質 (g)</label>
+            <input type="number" class="form-input goal-input" id="goal-fat" min="10" max="200" step="5">
+          </div>
+          <div class="form-group">
+            <label class="form-label" for="goal-carbs">🍚 炭水化物 (g)</label>
+            <input type="number" class="form-input goal-input" id="goal-carbs" min="20" max="600" step="10">
+          </div>
+        </div>
+        <div style="margin-top:20px">
+          <button class="btn btn-primary" onclick="App.saveGoals()" style="width:100%">
+            ✓ 目標を保存する
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <!-- API Info -->
+    <div style="margin-top:24px">
+      <div class="section-title"><span class="icon">🔑</span>API設定</div>
+      <div class="glass-card" style="padding:20px 24px">
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px">
+          <div>
+            <div style="font-size:15px;font-weight:600;color:var(--text-primary)">Gemini API</div>
+            <div style="font-size:12px;color:var(--text-muted);margin-top:4px">
+              食品認識・栄養分析に使用
+            </div>
+          </div>
+          <span id="key-status-2" class="badge badge-warning">未設定</span>
+        </div>
+        <button class="btn btn-ghost" onclick="App.openApiModal()" style="width:100%">
+          ⚙️ APIキーを設定する
+        </button>
+      </div>
+    </div>
+
+    <!-- About -->
+    <div style="margin-top:24px">
+      <div class="glass-card" style="padding:20px 24px;text-align:center">
+        <div style="font-size:40px;margin-bottom:12px">🍱</div>
+        <div style="font-size:18px;font-weight:700;background:var(--gradient-main);-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text">NutriLens</div>
+        <div style="font-size:12px;color:var(--text-muted);margin-top:8px;line-height:1.8">
+          AIが食事の写真を分析して<br>カロリー・栄養素を瞬時に計算<br>毎日の健康管理をサポートします
+        </div>
+      </div>
+    </div>
+
+  </section>
+
+</div><!-- #app -->
+
+<!-- ===== Bottom Navigation ===== -->
+<nav class="bottom-nav">
+  <button class="nav-btn active" data-tab="capture" id="nav-capture">
+    <span class="nav-btn-icon">📸</span>
+    <span class="nav-btn-label">撮影</span>
+  </button>
+  <button class="nav-btn" data-tab="dashboard" id="nav-dashboard">
+    <span class="nav-btn-icon">📊</span>
+    <span class="nav-btn-label">今日</span>
+  </button>
+  <button class="nav-btn" data-tab="history" id="nav-history">
+    <span class="nav-btn-icon">🗂️</span>
+    <span class="nav-btn-label">履歴</span>
+  </button>
+  <button class="nav-btn" data-tab="settings" id="nav-settings">
+    <span class="nav-btn-icon">⚙️</span>
+    <span class="nav-btn-label">設定</span>
+  </button>
+</nav>
+
+<!-- ===== Meal Detail Modal ===== -->
+<div class="modal-overlay detail-modal-overlay" id="detail-modal" role="dialog" aria-modal="true" aria-labelledby="detail-modal-title" onclick="if(event.target===this)App.closeMealDetail()">
+  <div class="modal detail-modal">
+
+    <!-- Modal Header -->
+    <div class="detail-modal-header">
+      <button class="btn btn-ghost btn-icon" onclick="App.closeMealDetail()" title="閉じる" style="margin-left:-8px">✕</button>
+      <div id="detail-modal-title" style="font-size:15px;font-weight:700;color:var(--text-primary)">食事の詳細</div>
+      <div style="width:40px"></div>
+    </div>
+
+    <!-- Scrollable content -->
+    <div class="detail-modal-body">
+
+      <!-- Food image -->
+      <div id="detail-image-wrap" style="display:none;margin-bottom:16px;border-radius:var(--radius-md);overflow:hidden;max-height:220px">
+        <img id="detail-image" src="" alt="食事の写真" style="width:100%;max-height:220px;object-fit:cover;display:block">
+      </div>
+
+      <!-- Food info -->
+      <div id="detail-food-name" style="font-size:24px;font-weight:800;background:var(--gradient-main);-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text;margin-bottom:4px"></div>
+      <div id="detail-food-name-en" style="font-size:13px;color:var(--text-muted);margin-bottom:8px"></div>
+      <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin-bottom:16px">
+        <span id="detail-health-badge" class="badge badge-success"></span>
+        <span id="detail-time" style="font-size:12px;color:var(--text-muted)"></span>
+      </div>
+
+      <!-- Calorie highlight -->
+      <div class="glass-card" style="padding:16px 20px;margin-bottom:14px;display:flex;align-items:center;gap:12px">
+        <div style="font-size:36px">🔥</div>
+        <div>
+          <div style="font-size:12px;color:var(--text-muted);text-transform:uppercase;letter-spacing:1px;font-weight:600">カロリー</div>
+          <div style="font-size:36px;font-weight:800;color:var(--accent-primary);line-height:1"><span id="detail-calories">0</span><span style="font-size:14px;color:var(--text-muted);font-weight:400;margin-left:4px">kcal</span></div>
+        </div>
+      </div>
+
+      <!-- PFC -->
+      <div class="glass-card" style="padding:16px 20px;margin-bottom:14px">
+        <div class="pfc-title" style="margin-bottom:12px">PFCバランス</div>
+        <div class="pfc-bar-container">
+          <div id="detail-pfc-protein" class="pfc-segment protein" style="width:0%"></div>
+          <div id="detail-pfc-fat"     class="pfc-segment fat"     style="width:0%"></div>
+          <div id="detail-pfc-carbs"   class="pfc-segment carbs"   style="width:0%"></div>
+        </div>
+        <div class="pfc-legend">
+          <div class="pfc-legend-item">
+            <div class="pfc-dot protein"></div>
+            <span class="pfc-label">タンパク質</span>
+            <span class="pfc-amount" id="detail-protein">—</span>
+          </div>
+          <div class="pfc-legend-item">
+            <div class="pfc-dot fat"></div>
+            <span class="pfc-label">脂質</span>
+            <span class="pfc-amount" id="detail-fat">—</span>
+          </div>
+          <div class="pfc-legend-item">
+            <div class="pfc-dot carbs"></div>
+            <span class="pfc-label">炭水化物</span>
+            <span class="pfc-amount" id="detail-carbs">—</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- Nutrients -->
+      <div class="glass-card" style="padding:16px 20px;margin-bottom:14px">
+        <div class="pfc-title" style="margin-bottom:12px">栄養素詳細</div>
+        <div class="nutrients-grid" id="detail-nutrients-grid"></div>
+      </div>
+
+      <!-- Per-dish breakdown -->
+      <div id="detail-items-section" style="display:none">
+        <div class="glass-card" style="padding:16px 20px;margin-bottom:14px">
+          <button class="items-toggle-btn" id="detail-toggle-items-btn" onclick="App.toggleDetailItems()" style="width:100%">
+            <span class="items-toggle-icon">🍱</span>
+            <span class="items-toggle-label">おかず別内訳を見る</span>
+            <span class="items-toggle-arrow">▼</span>
+          </button>
+          <div id="detail-items-list" style="display:none;margin-top:12px"></div>
+        </div>
+      </div>
+
+      <!-- AI Comment -->
+      <div class="glass-card" style="padding:14px 16px;display:flex;gap:12px;align-items:flex-start">
+        <div class="ai-avatar">🤖</div>
+        <div class="ai-comment-text" id="detail-ai-comment"></div>
+      </div>
+
+    </div><!-- .detail-modal-body -->
+  </div>
+</div>
+
+<!-- ===== API Settings Modal ===== -->
+<div class="modal-overlay" id="api-modal" role="dialog" aria-modal="true" aria-labelledby="modal-title">
+  <div class="modal">
+    <div class="modal-title" id="modal-title">🔑 Gemini APIキー設定</div>
+    <div class="modal-desc">
+      食品認識・栄養分析にGemini APIを使用します。<br>
+      <a href="https://aistudio.google.com/app/apikey" target="_blank" rel="noopener">Google AI Studio</a>
+      から無料で取得できます。<br>
+      <span style="font-size:12px;color:var(--text-muted)">※ キーはお使いのブラウザのみに保存され、外部には送信されません。</span>
+    </div>
+    <div class="form-group">
+      <label class="form-label" for="api-key-input">APIキー</label>
+      <div class="api-key-input-wrapper">
+        <input
+          type="password"
+          class="form-input"
+          id="api-key-input"
+          placeholder="AIza..."
+          autocomplete="off"
+          spellcheck="false"
+        >
+        <button class="toggle-visibility" id="btn-toggle-key" type="button" title="表示切替">👁️</button>
+      </div>
+    </div>
+    <div class="modal-actions">
+      <button class="btn btn-primary" id="btn-save-api" style="flex:1">保存する</button>
+      <button class="btn btn-ghost" id="btn-cancel-api">キャンセル</button>
+    </div>
+  </div>
+</div>
+
+<!-- ===== Toast Container ===== -->
+<div class="toast-container" id="toast-container"></div>
+
+<script src="app.js"></script>
+</body>
+</html>
