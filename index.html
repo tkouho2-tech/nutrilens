@@ -38,16 +38,16 @@
         <div class="upload-title">食事の写真を追加</div>
         <div class="upload-subtitle">ドラッグ＆ドロップ、または下のボタンから選択</div>
         <div class="upload-buttons" onclick="event.stopPropagation()">
-          <button class="btn btn-primary btn-lg" id="btn-camera">
+          <button class="btn btn-primary btn-lg" id="btn-camera" style="position: relative; overflow: hidden;">
             📷 カメラで撮影
+            <input type="file" id="camera-input" accept="image/*" capture="environment" style="position: absolute; top: 0; left: 0; width: 100%; height: 100%; opacity: 0; cursor: pointer; display: block;">
           </button>
-          <button class="btn btn-ghost btn-lg" id="btn-upload">
+          <button class="btn btn-ghost btn-lg" id="btn-upload" style="position: relative; overflow: hidden;">
             🖼️ 画像を選択
+            <input type="file" id="file-input" accept="image/*" style="position: absolute; top: 0; left: 0; width: 100%; height: 100%; opacity: 0; cursor: pointer; display: block;">
           </button>
         </div>
       </div>
-      <input type="file" id="file-input" accept="image/*">
-      <input type="file" id="camera-input" accept="image/*" capture="environment">
     </div>
 
     <!-- Preview Section -->

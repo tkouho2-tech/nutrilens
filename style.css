@@ -324,9 +324,7 @@ body::before {
   flex-wrap: wrap;
 }
 
-#file-input, #camera-input {
-  display: none;
-}
+
 
 /* ===== Preview Section ===== */
 #preview-section {

@@ -83,17 +83,7 @@ const App = {
       if (e.target.files[0]) this.handleImageFile(e.target.files[0]);
     });
 
-    // Camera button
-    document.getElementById('btn-camera').addEventListener('click', (e) => {
-      e.stopPropagation(); // <-- 親要素(uploadArea)への伝播を止める
-      document.getElementById('camera-input').click();
-    });
 
-    // Upload button
-    document.getElementById('btn-upload').addEventListener('click', (e) => {
-      e.stopPropagation();
-      document.getElementById('file-input').click();
-    });
 
     // Analyze button
     document.getElementById('btn-analyze').addEventListener('click', () => this.analyzeImage());
