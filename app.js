@@ -84,7 +84,8 @@ const App = {
     });
 
     // Camera button
-    document.getElementById('btn-camera').addEventListener('click', () => {
+    document.getElementById('btn-camera').addEventListener('click', (e) => {
+      e.stopPropagation(); // <-- 親要素(uploadArea)への伝播を止める
       document.getElementById('camera-input').click();
     });
 
@@ -819,6 +820,23 @@ itemsには写真に写っている個々のおかず・食材をそれぞれ列
     // AI Comment
     const aiEl = document.getElementById('detail-ai-comment');
     if (aiEl) aiEl.textContent = meal.aiComment || '';
+  },
+
+  // ===== Text-to-Speech (TTS) =====
+  speak(text) {
+    if (!text) return;
+    if ('speechSynthesis' in window) {
+      // 読み上げ中の場合はキャンセル
+      window.speechSynthesis.cancel();
+      const utterance = new SpeechSynthesisUtterance(text);
+      utterance.lang = 'ja-JP';
+      // 少し聞き取りやすい速度とピッチに調整
+      utterance.rate = 1.1; 
+      utterance.pitch = 1.0;
+      window.speechSynthesis.speak(utterance);
+    } else {
+      this.showToast('お使いのブラウザは音声読み上げに対応していません', 'error');
+    }
   },
 
   clearHistory() {

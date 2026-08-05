@@ -167,6 +167,7 @@
         <div class="ai-comment">
           <div class="ai-avatar">🤖</div>
           <div class="ai-comment-text" id="ai-comment-text">分析を行うとAIからアドバイスが届きます。</div>
+          <button class="btn btn-ghost btn-icon" id="btn-speak-result" style="margin-left:auto; align-self:center;" title="読み上げる" onclick="App.speak(document.getElementById('ai-comment-text').textContent)">🔊</button>
         </div>
 
 
@@ -417,6 +418,7 @@
       <div class="glass-card" style="padding:14px 16px;display:flex;gap:12px;align-items:flex-start">
         <div class="ai-avatar">🤖</div>
         <div class="ai-comment-text" id="detail-ai-comment"></div>
+        <button class="btn btn-ghost btn-icon" id="btn-speak-detail" style="margin-left:auto; align-self:center;" title="読み上げる" onclick="App.speak(document.getElementById('detail-ai-comment').textContent)">🔊</button>
       </div>
 
     </div><!-- .detail-modal-body -->
