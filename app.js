@@ -1,6 +1,9 @@
 // ===== NutriLens App - Main Application Logic =====
 
 const App = {
+  // Version
+  version: 'v1.0.1',
+
   // State
   state: {
     currentTab: 'capture',
@@ -15,12 +18,20 @@ const App = {
 
   // ===== Initialization =====
   init() {
+    this.renderVersion();
     this.loadFromStorage();
     this.bindEvents();
     this.renderHistory();
     this.renderDashboard();
     this.renderGoals();
     this.checkApiKey();
+  },
+
+  renderVersion() {
+    const verEl = document.getElementById('app-version');
+    if (verEl) {
+      verEl.textContent = this.version;
+    }
   },
 
   loadFromStorage() {
@@ -242,7 +253,7 @@ itemsには写真に写っている個々のおかず・食材をそれぞれ列
 }`;
 
     const response = await fetch(
-      `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${this.state.apiKey}`,
+      `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${this.state.apiKey}`,
       {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
