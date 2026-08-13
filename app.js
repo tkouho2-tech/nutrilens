@@ -2,12 +2,13 @@
 
 const App = {
   // Version
-  version: 'v1.0.1',
+  version: 'v1.0.2',
 
   // State
   state: {
     currentTab: 'capture',
     apiKey: '',
+    selectedModel: 'auto',
     imageBase64: null,
     imageDataUrl: null,
     currentResult: null,
@@ -41,6 +42,7 @@ const App = {
       this.state.mealHistory = data.mealHistory || [];
       this.state.goals = data.goals || this.state.goals;
       this.state.apiKey = data.apiKey || '';
+      this.state.selectedModel = data.selectedModel || 'auto';
     }
   },
 
@@ -49,6 +51,7 @@ const App = {
       mealHistory: this.state.mealHistory,
       goals: this.state.goals,
       apiKey: this.state.apiKey,
+      selectedModel: this.state.selectedModel,
     };
     localStorage.setItem('nutrilens_data', JSON.stringify(data));
   },
@@ -215,6 +218,24 @@ const App = {
     }
   },
 
+  async getAvailableModels(apiKey) {
+    try {
+      const response = await fetch(
+        `https://generativelanguage.googleapis.com/v1beta/models?key=${apiKey}`
+      );
+      if (!response.ok) return null;
+      const data = await response.json();
+      if (!data.models || !Array.isArray(data.models)) return null;
+
+      return data.models
+        .filter(m => m.supportedGenerationMethods && m.supportedGenerationMethods.includes('generateContent'))
+        .map(m => m.name.replace(/^models\//, ''));
+    } catch (e) {
+      console.warn('Geminiモデルリスト取得失敗:', e);
+      return null;
+    }
+  },
+
   async callGeminiApi(base64Image) {
     const prompt = `この料理の写真を詳しく分析して、以下のJSON形式で栄養情報を返してください。
 推定値で構いません。必ずJSON形式のみで返し、説明文は不要です。
@@ -252,45 +273,105 @@ itemsには写真に写っている個々のおかず・食材をそれぞれ列
   "aiComment": "この食事についての健康アドバイス（日本語、2文程度）"
 }`;
 
-    const response = await fetch(
-      `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${this.state.apiKey}`,
-      {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          contents: [{
-            parts: [
-              { text: prompt },
-              {
-                inlineData: {
-                  mimeType: 'image/jpeg',
-                  data: base64Image
-                }
-              }
-            ]
-          }],
-          generationConfig: {
-            responseMimeType: 'application/json',
-            temperature: 0.1
-          }
-        })
-      }
-    );
+    const fallbackCandidates = [
+      'gemini-2.5-flash',
+      'gemini-2.0-flash',
+      'gemini-1.5-flash-latest',
+      'gemini-1.5-flash',
+      'gemini-2.0-flash-lite',
+      'gemini-1.5-pro'
+    ];
 
-    if (!response.ok) {
-      const errData = await response.json().catch(() => ({}));
-      const msg = errData?.error?.message || `HTTPエラー ${response.status}`;
-      throw new Error(msg);
+    let modelsToTry = [];
+
+    if (this.state.selectedModel && this.state.selectedModel !== 'auto') {
+      modelsToTry.push(this.state.selectedModel);
+      fallbackCandidates.forEach(m => {
+        if (!modelsToTry.includes(m)) modelsToTry.push(m);
+      });
+    } else {
+      const available = await this.getAvailableModels(this.state.apiKey);
+      if (available && available.length > 0) {
+        const priorityOrder = [
+          'gemini-2.5-flash',
+          'gemini-2.0-flash',
+          'gemini-1.5-flash-latest',
+          'gemini-1.5-flash',
+          'gemini-2.0-flash-lite',
+          'gemini-1.5-pro'
+        ];
+        priorityOrder.forEach(p => {
+          if (available.includes(p) && !modelsToTry.includes(p)) {
+            modelsToTry.push(p);
+          }
+        });
+        available.forEach(m => {
+          if (!modelsToTry.includes(m)) modelsToTry.push(m);
+        });
+      }
+      
+      if (modelsToTry.length === 0) {
+        modelsToTry = [...fallbackCandidates];
+      }
     }
 
-    const data = await response.json();
-    const text = data.candidates?.[0]?.content?.parts?.[0]?.text;
-    if (!text) throw new Error('APIからレスポンスが取得できませんでした');
+    let lastError = null;
 
-    // Parse JSON from response
-    const jsonMatch = text.match(/\{[\s\S]*\}/);
-    if (!jsonMatch) throw new Error('JSONの解析に失敗しました');
-    return JSON.parse(jsonMatch[0]);
+    for (const modelName of modelsToTry) {
+      try {
+        const response = await fetch(
+          `https://generativelanguage.googleapis.com/v1beta/models/${modelName}:generateContent?key=${this.state.apiKey}`,
+          {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              contents: [{
+                parts: [
+                  { text: prompt },
+                  {
+                    inlineData: {
+                      mimeType: 'image/jpeg',
+                      data: base64Image
+                    }
+                  }
+                ]
+              }],
+              generationConfig: {
+                responseMimeType: 'application/json',
+                temperature: 0.1
+              }
+            })
+          }
+        );
+
+        if (!response.ok) {
+          const errData = await response.json().catch(() => ({}));
+          const msg = errData?.error?.message || `HTTPエラー ${response.status}`;
+          if (response.status === 404 || response.status === 400 || msg.includes('not found') || msg.includes('not supported')) {
+            console.warn(`Geminiモデル [${modelName}] 利用不可 (${msg})。フォールバックを試みます...`);
+            lastError = new Error(`モデル [${modelName}]: ${msg}`);
+            continue;
+          }
+          throw new Error(msg);
+        }
+
+        const data = await response.json();
+        const text = data.candidates?.[0]?.content?.parts?.[0]?.text;
+        if (!text) throw new Error('APIからレスポンスが取得できませんでした');
+
+        const jsonMatch = text.match(/\{[\s\S]*\}/);
+        if (!jsonMatch) throw new Error('JSONの解析に失敗しました');
+        return JSON.parse(jsonMatch[0]);
+
+      } catch (err) {
+        lastError = err;
+        if (!err.message.includes('not found') && !err.message.includes('not supported') && !err.message.includes('HTTPエラー 404')) {
+          throw err;
+        }
+      }
+    }
+
+    throw lastError || new Error('利用可能なGeminiモデルが見つかりませんでした。APIキーまたはモデル設定をご確認ください。');
   },
 
   // ===== Result Rendering =====
@@ -875,6 +956,10 @@ itemsには写真に写っている個々のおかず・食材をそれぞれ列
     const input = document.getElementById('api-key-input');
     input.value = this.state.apiKey;
     input.type = 'password';
+    const modelSelect = document.getElementById('api-model-select');
+    if (modelSelect) {
+      modelSelect.value = this.state.selectedModel || 'auto';
+    }
     setTimeout(() => input.focus(), 100);
   },
 
@@ -888,6 +973,10 @@ itemsには写真に写っている個々のおかず・食材をそれぞれ列
       this.showToast('APIキーを入力してください', 'error');
       return;
     }
+    const modelSelect = document.getElementById('api-model-select');
+    if (modelSelect) {
+      this.state.selectedModel = modelSelect.value || 'auto';
+    }
     this.state.apiKey = key;
     this.saveToStorage();
     this.closeApiModal();
@@ -896,7 +985,7 @@ itemsには写真に写っている個々のおかず・食材をそれぞれ列
       keyStatus.textContent = '✓ 設定済み';
       keyStatus.className = 'badge badge-success';
     }
-    this.showToast('APIキーを保存しました', 'success');
+    this.showToast('APIキー・モデル設定を保存しました', 'success');
   },
 
   toggleApiKeyVisibility() {

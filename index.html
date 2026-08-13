@@ -19,7 +19,7 @@
       <div>
         <div style="display: flex; align-items: center; gap: 8px;">
           <div class="logo-text">NutriLens</div>
-          <span class="app-version-badge" id="app-version">v1.0.1</span>
+          <span class="app-version-badge" id="app-version">v1.0.2</span>
         </div>
         <div class="logo-subtitle">AI栄養分析</div>
       </div>
@@ -451,6 +451,17 @@
         >
         <button class="toggle-visibility" id="btn-toggle-key" type="button" title="表示切替">👁️</button>
       </div>
+    </div>
+    <div class="form-group" style="margin-top:14px">
+      <label class="form-label" for="api-model-select">使用モデル</label>
+      <select class="form-select" id="api-model-select">
+        <option value="auto">⚡ 自動選択（推奨 / 利用可能な最新モデル）</option>
+        <option value="gemini-2.5-flash">Gemini 2.5 Flash</option>
+        <option value="gemini-2.0-flash">Gemini 2.0 Flash</option>
+        <option value="gemini-1.5-flash-latest">Gemini 1.5 Flash (Latest)</option>
+        <option value="gemini-1.5-flash">Gemini 1.5 Flash</option>
+        <option value="gemini-1.5-pro">Gemini 1.5 Pro</option>
+      </select>
     </div>
     <div class="modal-actions">
       <button class="btn btn-primary" id="btn-save-api" style="flex:1">保存する</button>
