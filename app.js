@@ -2,7 +2,7 @@
 
 const App = {
   // Version
-  version: 'v1.0.2',
+  version: 'v1.0.3',
 
   // State
   state: {
@@ -11,6 +11,7 @@ const App = {
     selectedModel: 'auto',
     imageBase64: null,
     imageDataUrl: null,
+    imageMimeType: 'image/jpeg',
     currentResult: null,
     mealHistory: [],
     goals: { calories: 2000, protein: 60, fat: 65, carbs: 250 },
@@ -150,20 +151,76 @@ const App = {
   },
 
   // ===== Image Handling =====
-  handleImageFile(file) {
+  async handleImageFile(file) {
     if (!file.type.startsWith('image/')) {
       this.showToast('画像ファイルを選択してください', 'error');
       return;
     }
-    const reader = new FileReader();
-    reader.onload = (e) => {
-      const dataUrl = e.target.result;
-      this.state.imageDataUrl = dataUrl;
-      // Extract base64 part
-      this.state.imageBase64 = dataUrl.split(',')[1];
-      this.showPreview(dataUrl);
-    };
-    reader.readAsDataURL(file);
+
+    try {
+      // iPhone等の高解像度写真対策：Canvasで長辺1200px・JPEG品質0.85に自動圧縮
+      const compressed = await this.compressImage(file, 1200, 0.85);
+      this.state.imageDataUrl = compressed.dataUrl;
+      this.state.imageBase64 = compressed.base64;
+      this.state.imageMimeType = compressed.mimeType;
+      this.showPreview(compressed.dataUrl);
+    } catch (err) {
+      console.warn('画像圧縮処理フォールバック:', err);
+      const reader = new FileReader();
+      reader.onload = (e) => {
+        const dataUrl = e.target.result;
+        const mimeMatch = dataUrl.match(/^data:(image\/[a-zA-Z+]+);base64,/);
+        this.state.imageMimeType = mimeMatch ? mimeMatch[1] : 'image/jpeg';
+        this.state.imageDataUrl = dataUrl;
+        this.state.imageBase64 = dataUrl.split(',')[1];
+        this.showPreview(dataUrl);
+      };
+      reader.readAsDataURL(file);
+    }
+  },
+
+  compressImage(file, maxDimension = 1200, quality = 0.85) {
+    return new Promise((resolve, reject) => {
+      const img = new Image();
+      const reader = new FileReader();
+
+      reader.onload = (e) => {
+        img.onload = () => {
+          let width = img.width;
+          let height = img.height;
+
+          if (width > maxDimension || height > maxDimension) {
+            if (width > height) {
+              height = Math.round((height * maxDimension) / width);
+              width = maxDimension;
+            } else {
+              width = Math.round((width * maxDimension) / height);
+              height = maxDimension;
+            }
+          }
+
+          const canvas = document.createElement('canvas');
+          canvas.width = width;
+          canvas.height = height;
+
+          const ctx = canvas.getContext('2d');
+          ctx.drawImage(img, 0, 0, width, height);
+
+          const resizedDataUrl = canvas.toDataURL('image/jpeg', quality);
+          const base64 = resizedDataUrl.split(',')[1];
+
+          resolve({
+            dataUrl: resizedDataUrl,
+            base64: base64,
+            mimeType: 'image/jpeg'
+          });
+        };
+        img.onerror = (err) => reject(new Error('画像の読み込みに失敗しました'));
+        img.src = e.target.result;
+      };
+      reader.onerror = (err) => reject(err);
+      reader.readAsDataURL(file);
+    });
   },
 
   showPreview(dataUrl) {
@@ -177,6 +234,7 @@ const App = {
   resetCapture() {
     this.state.imageBase64 = null;
     this.state.imageDataUrl = null;
+    this.state.imageMimeType = 'image/jpeg';
     this.state.currentResult = null;
     document.getElementById('upload-section').style.display = 'block';
     document.getElementById('preview-section').style.display = 'none';
@@ -227,8 +285,18 @@ const App = {
       const data = await response.json();
       if (!data.models || !Array.isArray(data.models)) return null;
 
+      // generateContent をサポートし、tts/embedding/audio等の非Vision・特殊モデルを除外
       return data.models
-        .filter(m => m.supportedGenerationMethods && m.supportedGenerationMethods.includes('generateContent'))
+        .filter(m => {
+          if (!m.supportedGenerationMethods || !m.supportedGenerationMethods.includes('generateContent')) {
+            return false;
+          }
+          const name = m.name.toLowerCase();
+          if (name.includes('tts') || name.includes('embedding') || name.includes('imagen') || name.includes('audio') || name.includes('realtime') || name.includes('bison')) {
+            return false;
+          }
+          return true;
+        })
         .map(m => m.name.replace(/^models\//, ''));
     } catch (e) {
       console.warn('Geminiモデルリスト取得失敗:', e);
@@ -330,7 +398,7 @@ itemsには写真に写っている個々のおかず・食材をそれぞれ列
                   { text: prompt },
                   {
                     inlineData: {
-                      mimeType: 'image/jpeg',
+                      mimeType: this.state.imageMimeType || 'image/jpeg',
                       data: base64Image
                     }
                   }
@@ -347,7 +415,7 @@ itemsには写真に写っている個々のおかず・食材をそれぞれ列
         if (!response.ok) {
           const errData = await response.json().catch(() => ({}));
           const msg = errData?.error?.message || `HTTPエラー ${response.status}`;
-          if (response.status === 404 || response.status === 400 || msg.includes('not found') || msg.includes('not supported')) {
+          if (response.status === 404 || response.status === 400 || response.status === 429 || msg.includes('not found') || msg.includes('not supported') || msg.includes('Quota exceeded')) {
             console.warn(`Geminiモデル [${modelName}] 利用不可 (${msg})。フォールバックを試みます...`);
             lastError = new Error(`モデル [${modelName}]: ${msg}`);
             continue;
