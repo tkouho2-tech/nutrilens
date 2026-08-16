@@ -19,7 +19,7 @@
       <div>
         <div style="display: flex; align-items: center; gap: 8px;">
           <div class="logo-text">NutriLens</div>
-          <span class="app-version-badge" id="app-version">v1.0.5</span>
+          <span class="app-version-badge" id="app-version">v1.0.6</span>
         </div>
         <div class="logo-subtitle">AI栄養分析</div>
       </div>
@@ -254,31 +254,87 @@
 
     <!-- Goal Settings -->
     <div id="goal-section">
-      <div class="section-title"><span class="icon">🎯</span>1日の目標設定</div>
+      <div class="section-title"><span class="icon">⚖️</span>体重＆身体目標設定</div>
       <div class="glass-card goal-card">
-        <div class="goal-inputs">
+        <p style="font-size:13px;color:var(--text-muted);margin:-4px 0 16px 0">
+          現在の体重と目標体重を入力するだけで、最適なカロリーと栄養素(PFC)を自動計算します。
+        </p>
+
+        <!-- Body Weight Inputs -->
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:16px">
           <div class="form-group">
-            <label class="form-label" for="goal-calories">🔥 目標カロリー (kcal)</label>
-            <input type="number" class="form-input goal-input" id="goal-calories" min="500" max="5000" step="50">
+            <label class="form-label" for="user-current-weight">⚖️ 現在の体重 (kg)</label>
+            <input type="number" class="form-input" id="user-current-weight" min="30" max="200" step="0.5" placeholder="65">
           </div>
           <div class="form-group">
-            <label class="form-label" for="goal-protein">💪 タンパク質 (g)</label>
-            <input type="number" class="form-input goal-input" id="goal-protein" min="10" max="300" step="5">
-          </div>
-          <div class="form-group">
-            <label class="form-label" for="goal-fat">🧈 脂質 (g)</label>
-            <input type="number" class="form-input goal-input" id="goal-fat" min="10" max="200" step="5">
-          </div>
-          <div class="form-group">
-            <label class="form-label" for="goal-carbs">🍚 炭水化物 (g)</label>
-            <input type="number" class="form-input goal-input" id="goal-carbs" min="20" max="600" step="10">
+            <label class="form-label" for="user-target-weight">🎯 目標体重 (kg)</label>
+            <input type="number" class="form-input" id="user-target-weight" min="30" max="200" step="0.5" placeholder="60">
           </div>
         </div>
-        <div style="margin-top:20px">
-          <button class="btn btn-primary" onclick="App.saveGoals()" style="width:100%">
-            ✓ 目標を保存する
-          </button>
+
+        <div class="form-group" style="margin-bottom:16px">
+          <label class="form-label" for="user-activity-level">🏃‍♂️ 日常の活動レベル</label>
+          <select class="form-select" id="user-activity-level">
+            <option value="light">デスクワーク中心・あまり動かない (低い)</option>
+            <option value="moderate" selected>立ち仕事・通勤で歩く (普通)</option>
+            <option value="active">スポーツ習慣・立ち仕事が多い (高い)</option>
+          </select>
         </div>
+
+        <!-- Calculated Target Summary Badge -->
+        <div id="calculated-target-summary" class="calculated-summary-box" style="background:rgba(61,255,160,0.08);border:1px solid rgba(61,255,160,0.25);border-radius:12px;padding:14px;margin-bottom:16px">
+          <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px">
+            <span id="target-mode-badge" class="badge badge-success" style="font-size:12px">📉 減量モード</span>
+            <span style="font-size:12px;color:var(--text-muted)">自動計算の1日目標</span>
+          </div>
+          <div style="display:grid;grid-template-columns:1fr 1fr 1fr 1fr;gap:8px;text-align:center">
+            <div>
+              <div style="font-size:10px;color:var(--text-muted)">カロリー</div>
+              <div id="calc-calories" style="font-size:15px;font-weight:700;color:var(--primary)">1800 kcal</div>
+            </div>
+            <div>
+              <div style="font-size:10px;color:var(--text-muted)">タンパク質</div>
+              <div id="calc-protein" style="font-size:14px;font-weight:600;color:#3b82f6">96g</div>
+            </div>
+            <div>
+              <div style="font-size:10px;color:var(--text-muted)">脂質</div>
+              <div id="calc-fat" style="font-size:14px;font-weight:600;color:#f59e0b">40g</div>
+            </div>
+            <div>
+              <div style="font-size:10px;color:var(--text-muted)">炭水化物</div>
+              <div id="calc-carbs" style="font-size:14px;font-weight:600;color:#ec4899">264g</div>
+            </div>
+          </div>
+        </div>
+
+        <button class="btn btn-primary" onclick="App.saveGoals()" style="width:100%;padding:12px;font-weight:600">
+          ✓ 目標を適用して保存する
+        </button>
+
+        <!-- Advanced Manual Customization Collapsible -->
+        <details style="margin-top:16px;border-top:1px solid var(--border-subtle);padding-top:12px">
+          <summary style="font-size:12px;color:var(--text-muted);cursor:pointer;user-select:none">
+            ⚙️ カロリー・PFCを直接手動調整したい場合
+          </summary>
+          <div class="goal-inputs" style="margin-top:12px">
+            <div class="form-group">
+              <label class="form-label" for="goal-calories">🔥 目標カロリー (kcal)</label>
+              <input type="number" class="form-input goal-input" id="goal-calories" min="500" max="5000" step="50">
+            </div>
+            <div class="form-group">
+              <label class="form-label" for="goal-protein">💪 タンパク質 (g)</label>
+              <input type="number" class="form-input goal-input" id="goal-protein" min="10" max="300" step="5">
+            </div>
+            <div class="form-group">
+              <label class="form-label" for="goal-fat">🧈 脂質 (g)</label>
+              <input type="number" class="form-input goal-input" id="goal-fat" min="10" max="200" step="5">
+            </div>
+            <div class="form-group">
+              <label class="form-label" for="goal-carbs">🍚 炭水化物 (g)</label>
+              <input type="number" class="form-input goal-input" id="goal-carbs" min="20" max="600" step="10">
+            </div>
+          </div>
+        </details>
       </div>
     </div>
 

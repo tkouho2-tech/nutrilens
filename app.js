@@ -2,7 +2,7 @@
 
 const App = {
   // Version
-  version: 'v1.0.4',
+  version: 'v1.0.6',
 
   // State
   state: {
@@ -14,7 +14,12 @@ const App = {
     imageMimeType: 'image/jpeg',
     currentResult: null,
     mealHistory: [],
-    goals: { calories: 2000, protein: 60, fat: 65, carbs: 250 },
+    userBody: {
+      currentWeight: 65,
+      targetWeight: 60,
+      activityLevel: 'moderate'
+    },
+    goals: { calories: 1800, protein: 95, fat: 45, carbs: 220 },
     isLoading: false,
   },
 
@@ -42,6 +47,7 @@ const App = {
       const data = JSON.parse(saved);
       this.state.mealHistory = data.mealHistory || [];
       this.state.goals = data.goals || this.state.goals;
+      this.state.userBody = data.userBody || this.state.userBody;
       this.state.apiKey = data.apiKey || '';
       this.state.selectedModel = data.selectedModel || 'auto';
     }
@@ -51,6 +57,7 @@ const App = {
     const data = {
       mealHistory: this.state.mealHistory,
       goals: this.state.goals,
+      userBody: this.state.userBody,
       apiKey: this.state.apiKey,
       selectedModel: this.state.selectedModel,
     };
@@ -128,9 +135,16 @@ const App = {
       if (e.target === e.currentTarget) this.closeApiModal();
     });
 
-    // Goal inputs
+    // Goal & Weight inputs
     document.querySelectorAll('.goal-input').forEach(input => {
       input.addEventListener('change', () => this.saveGoals());
+    });
+    ['user-current-weight', 'user-target-weight', 'user-activity-level'].forEach(id => {
+      const el = document.getElementById(id);
+      if (el) {
+        el.addEventListener('input', () => this.calculateGoalsFromWeight());
+        el.addEventListener('change', () => this.calculateGoalsFromWeight());
+      }
     });
 
     // Clear history
@@ -311,7 +325,21 @@ const App = {
   },
 
   async callGeminiApi(base64Image) {
+    const ub = this.state.userBody || {};
+    const curW = ub.currentWeight || 65;
+    const tarW = ub.targetWeight || 60;
+    const goalCal = this.state.goals?.calories || 1800;
+    const diff = (tarW - curW).toFixed(1);
+    let goalStr = `現在の体重: ${curW}kg, 目標体重: ${tarW}kg (体重維持目標, 1日目標: ${goalCal}kcal)`;
+    if (diff < 0) {
+      goalStr = `現在の体重: ${curW}kg, 目標体重: ${tarW}kg (減量 ${Math.abs(diff)}kg 目標, 1日目標: ${goalCal}kcal)`;
+    } else if (diff > 0) {
+      goalStr = `現在の体重: ${curW}kg, 目標体重: ${tarW}kg (増量 ${diff}kg 目標, 1日目標: ${goalCal}kcal)`;
+    }
+
     const prompt = `この料理の写真を詳しく分析して、以下のJSON形式で栄養情報を返してください。
+ユーザーの身体・目標情報: 【${goalStr}】
+aiCommentには、このユーザーの目標（${diff < 0 ? '減量' : diff > 0 ? '増量' : '維持'}）を考慮した、この食事に対するアドバイスやアドバイス（日本語2文程度）を含めてください。
 推定値で構いません。必ずJSON形式のみで返し、説明文は不要です。
 itemsには写真に写っている個々のおかず・食材をそれぞれ列挙してください。
 
@@ -344,7 +372,7 @@ itemsには写真に写っている個々のおかず・食材をそれぞれ列
     "vitaminA": 数値（μg）
   },
   "healthScore": 数値（1-10、健康的かどうか）,
-  "aiComment": "この食事についての健康アドバイス（日本語、2文程度）"
+  "aiComment": "この食事についての健康・目標アドバイス（日本語、2文程度）"
 }`;
 
     const fallbackCandidates = [
@@ -1027,23 +1055,120 @@ itemsには写真に写っている個々のおかず・食材をそれぞれ列
   },
 
   // ===== Goal Settings =====
+  calculateGoalsFromWeight() {
+    const curWEl = document.getElementById('user-current-weight');
+    const tarWEl = document.getElementById('user-target-weight');
+    const actEl = document.getElementById('user-activity-level');
+    if (!curWEl || !tarWEl || !actEl) return null;
+
+    const currentWeight = parseFloat(curWEl.value) || 65;
+    const targetWeight = parseFloat(tarWEl.value) || 60;
+    const activity = actEl.value || 'moderate';
+
+    this.state.userBody = { currentWeight, targetWeight, activityLevel: activity };
+
+    // 1. 基礎代謝 (BMR) 簡易算出 (kg * 22)
+    const bmr = currentWeight * 22;
+
+    // 2. 活動レベル乗数
+    const actMultipliers = { light: 1.3, moderate: 1.5, active: 1.75 };
+    const tdee = bmr * (actMultipliers[activity] || 1.5);
+
+    // 3. モード判定と目標カロリーの調整
+    const diff = targetWeight - currentWeight;
+    let modeText = '⚖️ 体重維持モード';
+    let targetCal = Math.round(tdee);
+
+    if (diff < -0.2) {
+      const loseDiff = Math.abs(diff).toFixed(1);
+      modeText = `📉 減量モード (-${loseDiff}kg)`;
+      targetCal = Math.max(1200, Math.round(tdee - 400));
+    } else if (diff > 0.2) {
+      const gainDiff = diff.toFixed(1);
+      modeText = `📈 増量モード (+${gainDiff}kg)`;
+      targetCal = Math.round(tdee + 350);
+    }
+
+    // 4. PFCバランス計算
+    let pRatio = 1.3;
+    if (diff < -0.2) pRatio = 1.6;
+    if (diff > 0.2) pRatio = 1.8;
+    const protein = Math.round(currentWeight * pRatio);
+
+    const fat = Math.round((targetCal * 0.22) / 9);
+
+    const carbs = Math.max(50, Math.round((targetCal - (protein * 4 + fat * 9)) / 4));
+
+    // UI表示の更新
+    const badgeEl = document.getElementById('target-mode-badge');
+    if (badgeEl) badgeEl.textContent = modeText;
+
+    const calcCalEl = document.getElementById('calc-calories');
+    if (calcCalEl) calcCalEl.textContent = `${targetCal} kcal`;
+
+    const calcPEl = document.getElementById('calc-protein');
+    if (calcPEl) calcPEl.textContent = `${protein}g`;
+
+    const calcFEl = document.getElementById('calc-fat');
+    if (calcFEl) calcFEl.textContent = `${fat}g`;
+
+    const calcCEl = document.getElementById('calc-carbs');
+    if (calcCEl) calcCEl.textContent = `${carbs}g`;
+
+    // 手動入力フォームへの同期
+    const calInput = document.getElementById('goal-calories');
+    const pInput = document.getElementById('goal-protein');
+    const fInput = document.getElementById('goal-fat');
+    const cInput = document.getElementById('goal-carbs');
+
+    if (calInput && (!calInput.value || document.activeElement !== calInput)) calInput.value = targetCal;
+    if (pInput && (!pInput.value || document.activeElement !== pInput)) pInput.value = protein;
+    if (fInput && (!fInput.value || document.activeElement !== fInput)) fInput.value = fat;
+    if (cInput && (!cInput.value || document.activeElement !== cInput)) cInput.value = carbs;
+
+    return { calories: targetCal, protein, fat, carbs };
+  },
+
   renderGoals() {
-    document.getElementById('goal-calories').value = this.state.goals.calories;
-    document.getElementById('goal-protein').value = this.state.goals.protein;
-    document.getElementById('goal-fat').value = this.state.goals.fat;
-    document.getElementById('goal-carbs').value = this.state.goals.carbs;
+    const ub = this.state.userBody || { currentWeight: 65, targetWeight: 60, activityLevel: 'moderate' };
+    const curWEl = document.getElementById('user-current-weight');
+    const tarWEl = document.getElementById('user-target-weight');
+    const actEl = document.getElementById('user-activity-level');
+
+    if (curWEl) curWEl.value = ub.currentWeight;
+    if (tarWEl) tarWEl.value = ub.targetWeight;
+    if (actEl) actEl.value = ub.activityLevel;
+
+    if (this.state.goals) {
+      const calInput = document.getElementById('goal-calories');
+      const pInput = document.getElementById('goal-protein');
+      const fInput = document.getElementById('goal-fat');
+      const cInput = document.getElementById('goal-carbs');
+      if (calInput) calInput.value = this.state.goals.calories;
+      if (pInput) pInput.value = this.state.goals.protein;
+      if (fInput) fInput.value = this.state.goals.fat;
+      if (cInput) cInput.value = this.state.goals.carbs;
+    }
+    this.calculateGoalsFromWeight();
   },
 
   saveGoals() {
+    const calc = this.calculateGoalsFromWeight() || {};
     this.state.goals = {
-      calories: parseInt(document.getElementById('goal-calories').value) || 2000,
-      protein: parseInt(document.getElementById('goal-protein').value) || 60,
-      fat: parseInt(document.getElementById('goal-fat').value) || 65,
-      carbs: parseInt(document.getElementById('goal-carbs').value) || 250,
+      calories: parseInt(document.getElementById('goal-calories').value) || calc.calories || 1800,
+      protein: parseInt(document.getElementById('goal-protein').value) || calc.protein || 90,
+      fat: parseInt(document.getElementById('goal-fat').value) || calc.fat || 45,
+      carbs: parseInt(document.getElementById('goal-carbs').value) || calc.carbs || 220,
     };
+
+    const curW = parseFloat(document.getElementById('user-current-weight').value) || 65;
+    const tarW = parseFloat(document.getElementById('user-target-weight').value) || 60;
+    const act = document.getElementById('user-activity-level').value || 'moderate';
+    this.state.userBody = { currentWeight: curW, targetWeight: tarW, activityLevel: act };
+
     this.saveToStorage();
     this.renderDashboard();
-    this.showToast('目標を保存しました', 'success');
+    this.showToast('体重目標・栄養目標を保存しました！', 'success');
   },
 
   // ===== API Modal =====
