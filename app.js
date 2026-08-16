@@ -2,7 +2,7 @@
 
 const App = {
   // Version
-  version: 'v1.0.3',
+  version: 'v1.0.4',
 
   // State
   state: {
@@ -282,7 +282,13 @@ const App = {
         `https://generativelanguage.googleapis.com/v1beta/models?key=${apiKey}`
       );
       if (!response.ok) return null;
-      const data = await response.json();
+      const resText = await response.text();
+      let data;
+      try {
+        data = JSON.parse(resText);
+      } catch (e) {
+        return null;
+      }
       if (!data.models || !Array.isArray(data.models)) return null;
 
       // generateContent をサポートし、tts/embedding/audio等の非Vision・特殊モデルを除外
@@ -342,9 +348,7 @@ itemsには写真に写っている個々のおかず・食材をそれぞれ列
 }`;
 
     const fallbackCandidates = [
-      'gemini-2.5-flash',
       'gemini-2.0-flash',
-      'gemini-1.5-flash-latest',
       'gemini-1.5-flash',
       'gemini-2.0-flash-lite',
       'gemini-1.5-pro'
@@ -361,9 +365,7 @@ itemsには写真に写っている個々のおかず・食材をそれぞれ列
       const available = await this.getAvailableModels(this.state.apiKey);
       if (available && available.length > 0) {
         const priorityOrder = [
-          'gemini-2.5-flash',
           'gemini-2.0-flash',
-          'gemini-1.5-flash-latest',
           'gemini-1.5-flash',
           'gemini-2.0-flash-lite',
           'gemini-1.5-pro'
@@ -412,30 +414,56 @@ itemsには写真に写っている個々のおかず・食材をそれぞれ列
           }
         );
 
+        const resText = await response.text();
+
         if (!response.ok) {
-          const errData = await response.json().catch(() => ({}));
-          const msg = errData?.error?.message || `HTTPエラー ${response.status}`;
-          if (response.status === 404 || response.status === 400 || response.status === 429 || msg.includes('not found') || msg.includes('not supported') || msg.includes('Quota exceeded')) {
-            console.warn(`Geminiモデル [${modelName}] 利用不可 (${msg})。フォールバックを試みます...`);
-            lastError = new Error(`モデル [${modelName}]: ${msg}`);
-            continue;
+          let msg = `HTTPエラー ${response.status}`;
+          try {
+            const errJson = JSON.parse(resText);
+            msg = errJson?.error?.message || msg;
+          } catch (e) {
+            // HTMLや非JSONの場合
           }
-          throw new Error(msg);
+
+          console.warn(`Geminiモデル [${modelName}] 利用不可 (${msg})。フォールバックを試みます...`);
+          lastError = new Error(`モデル [${modelName}]: ${msg}`);
+          continue;
         }
 
-        const data = await response.json();
-        const text = data.candidates?.[0]?.content?.parts?.[0]?.text;
-        if (!text) throw new Error('APIからレスポンスが取得できませんでした');
+        let data;
+        try {
+          data = JSON.parse(resText);
+        } catch (e) {
+          console.warn(`モデル [${modelName}] のレスポンスJSONパース失敗。フォールバックを試みます...`);
+          lastError = new Error(`モデル [${modelName}] レスポンス解析エラー`);
+          continue;
+        }
 
-        const jsonMatch = text.match(/\{[\s\S]*\}/);
-        if (!jsonMatch) throw new Error('JSONの解析に失敗しました');
-        return JSON.parse(jsonMatch[0]);
+        const text = data.candidates?.[0]?.content?.parts?.[0]?.text;
+        if (!text) {
+          console.warn(`モデル [${modelName}] からテキストが得られませんでした。フォールバックを試みます...`);
+          lastError = new Error(`モデル [${modelName}]: テキスト取得失敗`);
+          continue;
+        }
+
+        // マークダウン装飾（```json ... ```）の除去とJSON抽出
+        let cleanText = text.trim();
+        cleanText = cleanText.replace(/^```json\s*/i, '').replace(/^```\s*/, '').replace(/\s*```$/, '');
+        const jsonMatch = cleanText.match(/\{[\s\S]*\}/);
+        const jsonStr = jsonMatch ? jsonMatch[0] : cleanText;
+
+        try {
+          return JSON.parse(jsonStr);
+        } catch (parseErr) {
+          console.warn(`モデル [${modelName}] JSON構文解析失敗:`, parseErr);
+          lastError = new Error(`モデル [${modelName}]: JSONの構造解析に失敗しました`);
+          continue;
+        }
 
       } catch (err) {
+        console.warn(`モデル [${modelName}] 呼び出し例外:`, err.message);
         lastError = err;
-        if (!err.message.includes('not found') && !err.message.includes('not supported') && !err.message.includes('HTTPエラー 404')) {
-          throw err;
-        }
+        continue;
       }
     }
 
