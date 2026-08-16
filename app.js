@@ -379,7 +379,7 @@ itemsには写真に写っている個々のおかず・食材をそれぞれ列
           if (!modelsToTry.includes(m)) modelsToTry.push(m);
         });
       }
-      
+
       if (modelsToTry.length === 0) {
         modelsToTry = [...fallbackCandidates];
       }
@@ -953,12 +953,12 @@ itemsには写真に写っている個々のおかず・食材をそれぞれ列
     // Nutrients
     const n = meal.nutrients || {};
     const nutrientMap = [
-      { value: n.fiber,     unit: 'g',  icon: '🌿', name: '食物繊維' },
-      { value: n.sodium,    unit: 'mg', icon: '🧂', name: 'ナトリウム' },
-      { value: n.calcium,   unit: 'mg', icon: '🦴', name: 'カルシウム' },
-      { value: n.iron,      unit: 'mg', icon: '⚡', name: '鉄分' },
-      { value: n.vitaminC,  unit: 'mg', icon: '🍋', name: 'ビタミンC' },
-      { value: n.vitaminA,  unit: 'μg', icon: '👁️', name: 'ビタミンA' },
+      { value: n.fiber, unit: 'g', icon: '🌿', name: '食物繊維' },
+      { value: n.sodium, unit: 'mg', icon: '🧂', name: 'ナトリウム' },
+      { value: n.calcium, unit: 'mg', icon: '🦴', name: 'カルシウム' },
+      { value: n.iron, unit: 'mg', icon: '⚡', name: '鉄分' },
+      { value: n.vitaminC, unit: 'mg', icon: '🍋', name: 'ビタミンC' },
+      { value: n.vitaminA, unit: 'μg', icon: '👁️', name: 'ビタミンA' },
     ];
     const ngrid = document.getElementById('detail-nutrients-grid');
     ngrid.innerHTML = '';
@@ -1009,7 +1009,7 @@ itemsには写真に写っている個々のおかず・食材をそれぞれ列
       const utterance = new SpeechSynthesisUtterance(text);
       utterance.lang = 'ja-JP';
       // 少し聞き取りやすい速度とピッチに調整
-      utterance.rate = 1.1; 
+      utterance.rate = 1.1;
       utterance.pitch = 1.0;
       window.speechSynthesis.speak(utterance);
     } else {
