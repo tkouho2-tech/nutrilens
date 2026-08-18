@@ -2,7 +2,7 @@
 
 const App = {
   // Version
-  version: 'v1.0.23',
+  version: 'v1.0.24',
 
   // State
   state: {
@@ -1045,9 +1045,14 @@ itemsには写真に写っている個々のおかず・食材をそれぞれ列
               <div style="font-size:13px; font-weight:700; color:var(--text-primary); display:flex; align-items:center; gap:6px;">
                 <span>🤖</span> AI 1日の総括アドバイス
               </div>
-              <button class="btn btn-ghost" onclick="App.openDailySummaryModal('${dateStr}')" style="padding:3px 10px; font-size:11px; border-radius:12px;">
-                ✏️ 測定値を変更・再分析 ➔
-              </button>
+              <div style="display:flex; gap:6px; align-items:center;">
+                <button class="btn btn-ghost" id="btn-speak-dash-summary" style="padding:3px 8px; font-size:11px; border-radius:10px; display:inline-flex; align-items:center; gap:4px;" title="総括アドバイスを読み上げる" onclick="App.speak(document.getElementById('dash-daily-ai-comment').textContent)">
+                  🔊 読上げ
+                </button>
+                <button class="btn btn-ghost" onclick="App.openDailySummaryModal('${dateStr}')" style="padding:3px 10px; font-size:11px; border-radius:12px;">
+                  ✏️ 測定値を変更・再分析 ➔
+                </button>
+              </div>
             </div>
 
             <!-- Measurement Badges -->
@@ -1060,7 +1065,7 @@ itemsには写真に写っている個々のおかず・食材をそれぞれ列
             </div>
 
             <!-- AI Comment -->
-            <div style="font-size:13px; color:var(--text-primary); line-height:1.65; white-space:pre-wrap; background:rgba(0,0,0,0.18); padding:12px 14px; border-radius:var(--radius-sm); border:1px solid rgba(255,255,255,0.04);">
+            <div id="dash-daily-ai-comment" style="font-size:13px; color:var(--text-primary); line-height:1.65; white-space:pre-wrap; background:rgba(0,0,0,0.18); padding:12px 14px; border-radius:var(--radius-sm); border:1px solid rgba(255,255,255,0.04);">
               ${summary.aiComment || '本日の総括アドバイスはありません。'}
             </div>
           </div>
@@ -1622,12 +1627,15 @@ itemsには写真に写っている個々のおかず・食材をそれぞれ列
   speak(text) {
     if (!text) return;
     if ('speechSynthesis' in window) {
-      // 読み上げ中の場合はキャンセル
+      if (window.speechSynthesis.speaking) {
+        window.speechSynthesis.cancel();
+        return;
+      }
       window.speechSynthesis.cancel();
       const utterance = new SpeechSynthesisUtterance(text);
       utterance.lang = 'ja-JP';
-      // 少し聞き取りやすい速度とピッチに調整
-      utterance.rate = 1.1;
+      // 自然で聞き取りやすい速度とピッチ
+      utterance.rate = 1.05;
       utterance.pitch = 1.0;
       window.speechSynthesis.speak(utterance);
     } else {
