@@ -2,7 +2,7 @@
 
 const App = {
   // Version
-  version: 'v1.0.7',
+  version: 'v1.0.11',
 
   // State
   state: {
@@ -24,9 +24,9 @@ const App = {
   },
 
   // ===== Initialization =====
-  init() {
+  async init() {
     this.renderVersion();
-    this.loadFromStorage();
+    await this.loadFromStorage();
     this.bindEvents();
     this.renderHistory();
     this.renderDashboard();
@@ -41,19 +41,57 @@ const App = {
     }
   },
 
-  loadFromStorage() {
-    const saved = localStorage.getItem('nutrilens_data');
-    if (saved) {
-      const data = JSON.parse(saved);
-      this.state.mealHistory = data.mealHistory || [];
-      this.state.goals = data.goals || this.state.goals;
-      this.state.userBody = data.userBody || this.state.userBody;
-      this.state.apiKey = data.apiKey || '';
-      this.state.selectedModel = data.selectedModel || 'auto';
+  // ===== IndexedDB Helpers =====
+  initDB() {
+    return new Promise((resolve, reject) => {
+      const request = indexedDB.open('NutriLensDB', 1);
+      request.onerror = (e) => reject(e);
+      request.onsuccess = (e) => resolve(e.target.result);
+      request.onupgradeneeded = (e) => {
+        const db = e.target.result;
+        if (!db.objectStoreNames.contains('nutrilens_data')) {
+          db.createObjectStore('nutrilens_data');
+        }
+      };
+    });
+  },
+
+  async loadFromStorage() {
+    try {
+      const db = await this.initDB();
+      const transaction = db.transaction(['nutrilens_data'], 'readonly');
+      const store = transaction.objectStore('nutrilens_data');
+      const request = store.get('app_state');
+
+      let data = await new Promise((resolve, reject) => {
+        request.onsuccess = () => resolve(request.result);
+        request.onerror = () => reject(request.error);
+      });
+
+      // マイグレーション: localStorage にデータが残っていれば引き継ぐ
+      if (!data) {
+        const saved = localStorage.getItem('nutrilens_data');
+        if (saved) {
+          data = JSON.parse(saved);
+          console.log('Migrating data from localStorage to IndexedDB');
+          await this._saveDataToDB(db, data);
+          localStorage.removeItem('nutrilens_data');
+        }
+      }
+
+      if (data) {
+        this.state.mealHistory = data.mealHistory || [];
+        this.state.goals = data.goals || this.state.goals;
+        this.state.userBody = data.userBody || this.state.userBody;
+        this.state.apiKey = data.apiKey || '';
+        this.state.selectedModel = data.selectedModel || 'auto';
+      }
+    } catch (e) {
+      console.error('Failed to load from storage:', e);
     }
   },
 
-  saveToStorage() {
+  async saveToStorage() {
     const data = {
       mealHistory: this.state.mealHistory,
       goals: this.state.goals,
@@ -61,7 +99,23 @@ const App = {
       apiKey: this.state.apiKey,
       selectedModel: this.state.selectedModel,
     };
-    localStorage.setItem('nutrilens_data', JSON.stringify(data));
+    try {
+      const db = await this.initDB();
+      await this._saveDataToDB(db, data);
+    } catch (e) {
+      console.error('Failed to save to storage:', e);
+      this.showToast('データの保存に失敗しました', 'error');
+    }
+  },
+
+  _saveDataToDB(db, data) {
+    return new Promise((resolve, reject) => {
+      const transaction = db.transaction(['nutrilens_data'], 'readwrite');
+      const store = transaction.objectStore('nutrilens_data');
+      const request = store.put(data, 'app_state');
+      request.onsuccess = () => resolve();
+      request.onerror = () => reject(request.error);
+    });
   },
 
   checkApiKey() {
@@ -112,9 +166,6 @@ const App = {
 
     // Reset button
     document.getElementById('btn-reset').addEventListener('click', () => this.resetCapture());
-
-    // Save meal button
-    document.getElementById('btn-save-meal').addEventListener('click', () => this.saveMeal());
 
     // Re-analyze button
     document.getElementById('btn-reanalyze').addEventListener('click', () => this.resetCapture());
@@ -282,6 +333,9 @@ const App = {
       document.getElementById('loading-section').style.display = 'none';
       document.getElementById('result-section').style.display = 'block';
       document.getElementById('result-section').classList.add('fade-in');
+
+      // 自動保存
+      await this.saveMeal(true);
     } catch (err) {
       console.error('Analysis error:', err);
       document.getElementById('loading-section').style.display = 'none';
@@ -339,7 +393,7 @@ const App = {
 
     const prompt = `この料理の写真を詳しく分析して、以下のJSON形式で栄養情報を返してください。
 ユーザーの身体・目標情報: 【${goalStr}】
-aiCommentには、このユーザーの目標（${diff < 0 ? '減量' : diff > 0 ? '増量' : '維持'}）を考慮した、この食事に対するアドバイスやアドバイス（日本語2文程度）を含めてください。
+aiCommentには、このユーザーの目標（${diff < 0 ? '減量' : diff > 0 ? '増量' : '維持'}）を考慮したアドバイスに加えて、分析した特徴的な栄養素が体にどのような効果（メリット）や悪影響（デメリット）をもたらすかを具体的に含め、日本語3〜4文程度で記述してください。
 推定値で構いません。必ずJSON形式のみで返し、説明文は不要です。
 itemsには写真に写っている個々のおかず・食材をそれぞれ列挙してください。
 
@@ -372,7 +426,7 @@ itemsには写真に写っている個々のおかず・食材をそれぞれ列
     "vitaminA": 数値（μg）
   },
   "healthScore": 数値（1-10、健康的かどうか）,
-  "aiComment": "この食事についての健康・目標アドバイス（日本語、2文程度）"
+  "aiComment": "この食事についての健康・目標アドバイスと栄養素の効果（日本語、3〜4文程度）"
 }`;
 
     const fallbackCandidates = [
@@ -724,7 +778,7 @@ itemsには写真に写っている個々のおかず・食材をそれぞれ列
   },
 
   // ===== Save Meal =====
-  saveMeal() {
+  async saveMeal(isAuto = false) {
     if (!this.state.currentResult) return;
     const meal = {
       id: Date.now(),
@@ -733,12 +787,20 @@ itemsには写真に写っている個々のおかず・食材をそれぞれ列
       ...this.state.currentResult,
     };
     this.state.mealHistory.unshift(meal);
-    this.saveToStorage();
-    this.showToast(`「${meal.foodName}」を記録しました！`, 'success');
+    await this.saveToStorage();
+    
+    if (isAuto) {
+      this.showToast(`「${meal.foodName}」を自動で記録しました`, 'success');
+    } else {
+      this.showToast(`「${meal.foodName}」を記録しました！`, 'success');
+    }
+
     this.renderHistory();
     this.renderDashboard();
     // Switch to history tab
-    setTimeout(() => this.switchTab('history'), 800);
+    if (!isAuto) {
+      setTimeout(() => this.switchTab('history'), 800);
+    }
   },
 
   // ===== Dashboard =====
@@ -916,9 +978,10 @@ itemsには写真に写っている個々のおかず・食材をそれぞれ列
 
   },
 
-  deleteMeal(id) {
+  async deleteMeal(id) {
+    if (!confirm('この食事記録を削除しますか？')) return;
     this.state.mealHistory = this.state.mealHistory.filter(m => m.id !== id);
-    this.saveToStorage();
+    await this.saveToStorage();
     this.renderHistory();
     this.renderDashboard();
     this.showToast('食事記録を削除しました', 'info');
@@ -1045,10 +1108,10 @@ itemsには写真に写っている個々のおかず・食材をそれぞれ列
     }
   },
 
-  clearHistory() {
+  async clearHistory() {
     if (!confirm('全ての食事記録を削除しますか？')) return;
     this.state.mealHistory = [];
-    this.saveToStorage();
+    await this.saveToStorage();
     this.renderHistory();
     this.renderDashboard();
     this.showToast('食事記録をリセットしました', 'info');
@@ -1152,7 +1215,7 @@ itemsには写真に写っている個々のおかず・食材をそれぞれ列
     this.calculateGoalsFromWeight();
   },
 
-  saveGoals() {
+  async saveGoals() {
     const calc = this.calculateGoalsFromWeight() || {};
     this.state.goals = {
       calories: parseInt(document.getElementById('goal-calories').value) || calc.calories || 1800,
@@ -1166,7 +1229,7 @@ itemsには写真に写っている個々のおかず・食材をそれぞれ列
     const act = document.getElementById('user-activity-level').value || 'moderate';
     this.state.userBody = { currentWeight: curW, targetWeight: tarW, activityLevel: act };
 
-    this.saveToStorage();
+    await this.saveToStorage();
     this.renderDashboard();
     this.showToast('体重目標・栄養目標を保存しました！', 'success');
   },
@@ -1188,7 +1251,7 @@ itemsには写真に写っている個々のおかず・食材をそれぞれ列
     document.getElementById('api-modal').classList.remove('active');
   },
 
-  saveApiKey() {
+  async saveApiKey() {
     const key = document.getElementById('api-key-input').value.trim();
     if (!key) {
       this.showToast('APIキーを入力してください', 'error');
@@ -1199,7 +1262,7 @@ itemsには写真に写っている個々のおかず・食材をそれぞれ列
       this.state.selectedModel = modelSelect.value || 'auto';
     }
     this.state.apiKey = key;
-    this.saveToStorage();
+    await this.saveToStorage();
     this.closeApiModal();
     const keyStatus = document.getElementById('key-status');
     if (keyStatus) {
