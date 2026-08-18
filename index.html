@@ -8,7 +8,7 @@
   <meta http-equiv="Expires" content="0">
   <title>NutriLens — AI食事栄養分析アプリ</title>
   <meta name="description" content="食事の写真を撮るだけでAIがカロリーや栄養素を自動分析。毎日の健康管理をスマートにサポートします。">
-  <link rel="stylesheet" href="style.css?v=1.0.20">
+  <link rel="stylesheet" href="style.css?v=1.0.21">
 </head>
 <body>
 
@@ -22,7 +22,7 @@
       <div>
         <div style="display: flex; align-items: center; gap: 8px;">
           <div class="logo-text">NutriLens</div>
-          <span class="app-version-badge" id="app-version">v1.0.20</span>
+          <span class="app-version-badge" id="app-version">v1.0.21</span>
         </div>
         <div class="logo-subtitle">AI栄養分析</div>
       </div>
@@ -212,23 +212,33 @@
         </div>
       </div>
 
-      <!-- Quick Summary Stats Grid (食事回数, 体重, 全記録数) -->
-      <div class="dashboard-grid" style="grid-template-columns: repeat(3, 1fr); margin-bottom:14px; gap:10px;">
-        <div class="glass-card stat-card" style="padding:14px 10px; text-align:center;">
-          <div class="stat-label" style="font-size:11px;">🍽️ 食事回数</div>
-          <div class="stat-value" id="dash-meals" style="font-size:22px; font-weight:800;">0</div>
-          <div class="stat-sub">食</div>
+      <!-- Quick Summary Stats Grid (食事回数, 体重, 血圧, 全記録数) -->
+      <div class="dashboard-grid" style="grid-template-columns: repeat(4, 1fr); margin-bottom:14px; gap:8px;">
+        <div class="glass-card stat-card" style="padding:12px 6px; text-align:center;">
+          <div class="stat-label" style="font-size:10px;">🍽️ 食事</div>
+          <div class="stat-value" id="dash-meals" style="font-size:20px; font-weight:800;">0</div>
+          <div class="stat-sub" style="font-size:10px;">食</div>
         </div>
-        <div class="glass-card stat-card" style="padding:14px 10px; text-align:center;">
-          <div class="stat-label" style="font-size:11px;">⚖️ 体重</div>
-          <div class="stat-value" id="dash-weight" style="font-size:22px; font-weight:800;">--</div>
-          <div class="stat-sub">kg</div>
+        <div class="glass-card stat-card" style="padding:12px 6px; text-align:center;">
+          <div class="stat-label" style="font-size:10px;">⚖️ 体重</div>
+          <div class="stat-value" id="dash-weight" style="font-size:20px; font-weight:800;">--</div>
+          <div class="stat-sub" style="font-size:10px;">kg</div>
         </div>
-        <div class="glass-card stat-card" style="padding:14px 10px; text-align:center;">
-          <div class="stat-label" style="font-size:11px;">📅 全記録数</div>
-          <div class="stat-value" id="dash-total" style="font-size:22px; font-weight:800;">0</div>
-          <div class="stat-sub">合計食事数</div>
+        <div class="glass-card stat-card" style="padding:12px 6px; text-align:center;">
+          <div class="stat-label" style="font-size:10px;">💓 血圧</div>
+          <div class="stat-value" id="dash-bp" style="font-size:16px; font-weight:800; line-height:1.25; margin-top:2px;">--</div>
+          <div class="stat-sub" style="font-size:9px;">mmHg</div>
         </div>
+        <div class="glass-card stat-card" style="padding:12px 6px; text-align:center;">
+          <div class="stat-label" style="font-size:10px;">📅 全記録</div>
+          <div class="stat-value" id="dash-total" style="font-size:20px; font-weight:800;">0</div>
+          <div class="stat-sub" style="font-size:10px;">件</div>
+        </div>
+      </div>
+
+      <!-- AI 1日の総括 ＆ 測定データ（体重・血圧・アドバイス）表示カード -->
+      <div id="dash-daily-summary-section" style="margin-bottom:14px;">
+        <!-- 動的生成 (AI総括結果カード または 総括実行ボタン) -->
       </div>
 
       <!-- 1. Calorie Section: 1日合計カロリー + 食事時間ごとのカロリー内訳 -->
@@ -780,6 +790,6 @@
 <!-- ===== Toast Container ===== -->
 <div class="toast-container" id="toast-container"></div>
 
-<script src="app.js?v=1.0.20"></script>
+<script src="app.js?v=1.0.21"></script>
 </body>
 </html>

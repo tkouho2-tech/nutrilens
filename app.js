@@ -2,7 +2,7 @@
 
 const App = {
   // Version
-  version: 'v1.0.20',
+  version: 'v1.0.21',
 
   // State
   state: {
@@ -927,20 +927,95 @@ itemsには写真に写っている個々のおかず・食材をそれぞれ列
     });
     dayMeals.sort((a, b) => new Date(a.timestamp) - new Date(b.timestamp));
 
-    // 3. Quick Stats
+    // 3. Quick Stats & Daily Summary Data for selected date
+    const summary = this.state.dailySummaries[dateStr];
+
     const mealsCountEl = document.getElementById('dash-meals');
     if (mealsCountEl) mealsCountEl.textContent = dayMeals.length;
 
     const weightEl = document.getElementById('dash-weight');
     if (weightEl) {
-      const w = this.state.userBody?.currentWeight;
-      weightEl.textContent = w ? `${w}` : '--';
+      const w = summary?.weight ?? this.state.userBody?.currentWeight;
+      weightEl.textContent = (w !== undefined && w !== null) ? `${w}` : '--';
+    }
+
+    const bpEl = document.getElementById('dash-bp');
+    if (bpEl) {
+      if (summary?.bpSys && summary?.bpDia) {
+        bpEl.textContent = `${summary.bpSys}/${summary.bpDia}`;
+      } else if (this.state.userBody?.bloodPressureSystolic && this.state.userBody?.bloodPressureDiastolic) {
+        bpEl.textContent = `${this.state.userBody.bloodPressureSystolic}/${this.state.userBody.bloodPressureDiastolic}`;
+      } else {
+        bpEl.textContent = '--';
+      }
     }
 
     const totalEl = document.getElementById('dash-total');
     if (totalEl) totalEl.textContent = this.state.mealHistory.length;
 
-    // 4. Calculate Totals
+    // 4. Render Daily Summary AI Advice & Measurements Card (#dash-daily-summary-section)
+    const summarySecEl = document.getElementById('dash-daily-summary-section');
+    if (summarySecEl) {
+      if (summary) {
+        const w = summary.weight ?? this.state.userBody?.currentWeight ?? '--';
+        const sys = summary.bpSys ?? this.state.userBody?.bloodPressureSystolic;
+        const dia = summary.bpDia ?? this.state.userBody?.bloodPressureDiastolic;
+        
+        let bpStatus = '';
+        if (sys && dia) {
+          if (sys >= 140 || dia >= 90) bpStatus = ' (高め)';
+          else if (sys < 120 && dia < 80) bpStatus = ' (正常)';
+        }
+        const bpText = (sys && dia) ? `💓 ${sys}/${dia} mmHg${bpStatus}` : '';
+
+        summarySecEl.innerHTML = `
+          <div class="glass-card" style="padding:16px 18px; background:rgba(61,255,160,0.03); border:1px solid rgba(61,255,160,0.22); border-radius:var(--radius-md);">
+            <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:8px; flex-wrap:wrap; gap:6px;">
+              <div style="font-size:13px; font-weight:700; color:var(--text-primary); display:flex; align-items:center; gap:6px;">
+                <span>🤖</span> AI 1日の総括アドバイス
+              </div>
+              <button class="btn btn-ghost" onclick="App.openDailySummaryModal('${dateStr}')" style="padding:3px 10px; font-size:11px; border-radius:12px;">
+                ✏️ 測定値を変更・再分析 ➔
+              </button>
+            </div>
+
+            <!-- Measurement Badges -->
+            <div style="display:flex; gap:6px; margin-bottom:10px; flex-wrap:wrap; align-items:center;">
+              <span class="badge badge-success" style="font-size:11px; padding:3px 8px;">⚖️ ${w}kg</span>
+              ${bpText ? `<span class="badge badge-info" style="font-size:11px; padding:3px 8px;">${bpText}</span>` : ''}
+              <span class="badge" style="font-size:11px; padding:3px 8px; background:rgba(255,255,255,0.06); color:var(--text-light);">
+                🔥 合計 ${summary.totalCalories || totalCal} kcal
+              </span>
+            </div>
+
+            <!-- AI Comment -->
+            <div style="font-size:13px; color:var(--text-primary); line-height:1.65; white-space:pre-wrap; background:rgba(0,0,0,0.18); padding:12px 14px; border-radius:var(--radius-sm); border:1px solid rgba(255,255,255,0.04);">
+              ${summary.aiComment || '本日の総括アドバイスはありません。'}
+            </div>
+          </div>
+        `;
+      } else if (dayMeals.length > 0) {
+        summarySecEl.innerHTML = `
+          <div class="glass-card" style="padding:14px 16px; background:rgba(255,255,255,0.02); border:1px solid var(--glass-border); border-radius:var(--radius-md); display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:10px;">
+            <div>
+              <div style="font-size:13px; font-weight:700; color:var(--text-primary); margin-bottom:2px;">
+                📊 1日のAI総括が未実行です
+              </div>
+              <div style="font-size:11px; color:var(--text-muted);">
+                体重・血圧を入力して、医師・栄養士AIから総合アドバイスを受け取れます
+              </div>
+            </div>
+            <button class="btn btn-primary" onclick="App.openDailySummaryModal('${dateStr}')" style="padding:8px 14px; font-size:12px; font-weight:700;">
+              🤖 AI総括を実行
+            </button>
+          </div>
+        `;
+      } else {
+        summarySecEl.innerHTML = '';
+      }
+    }
+
+    // 5. Calculate Totals
     const totalCal = dayMeals.reduce((s, m) => s + (m.calories || 0), 0);
     const totalProtein = dayMeals.reduce((s, m) => s + (m.pfc?.protein || 0), 0);
     const totalFat = dayMeals.reduce((s, m) => s + (m.pfc?.fat || 0), 0);
@@ -1747,6 +1822,7 @@ ${mealsSummaryText}
       this.state.dailySummaries[dateStr] = summary;
       await this.saveToStorage();
       this.renderDailySummaryResult(summary);
+      this.renderDashboard();
       
       if (force) {
         this.showToast('1日の総括分析が完了しました', 'success');
