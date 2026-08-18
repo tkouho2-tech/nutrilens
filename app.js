@@ -2,7 +2,7 @@
 
 const App = {
   // Version
-  version: 'v1.0.21',
+  version: 'v1.0.22',
 
   // State
   state: {
@@ -95,10 +95,41 @@ const App = {
         this.state.userBody = data.userBody || this.state.userBody;
         this.state.apiKey = data.apiKey || '';
         this.state.selectedModel = data.selectedModel || 'auto';
+
+        // 食事記録が0件の日付の孤立した古いサマリーを自動クリーンアップ
+        if (this.cleanOrphanDailySummaries()) {
+          await this.saveToStorage();
+        }
       }
     } catch (e) {
       console.error('Failed to load from storage:', e);
     }
+  },
+
+  cleanOrphanDailySummaries() {
+    if (!this.state.dailySummaries || typeof this.state.dailySummaries !== 'object') return false;
+    
+    // 存在する全食事の日付一覧（YYYY-MM-DD）を取得
+    const activeDates = new Set();
+    this.state.mealHistory.forEach(m => {
+      const d = new Date(m.timestamp);
+      if (!isNaN(d.getTime())) {
+        const s = d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0');
+        activeDates.add(s);
+      }
+    });
+
+    // 食事データが存在しない日付の dailySummaries を削除
+    let changed = false;
+    Object.keys(this.state.dailySummaries).forEach(dateKey => {
+      if (!activeDates.has(dateKey)) {
+        console.log(`Cleaning up orphan daily summary for date with no meals: ${dateKey}`);
+        delete this.state.dailySummaries[dateKey];
+        changed = true;
+      }
+    });
+
+    return changed;
   },
 
   async saveToStorage() {
@@ -928,23 +959,32 @@ itemsには写真に写っている個々のおかず・食材をそれぞれ列
     dayMeals.sort((a, b) => new Date(a.timestamp) - new Date(b.timestamp));
 
     // 3. Quick Stats & Daily Summary Data for selected date
-    const summary = this.state.dailySummaries[dateStr];
+    // 食事記録が1件以上ある場合のみサマリーを有効とする
+    const summary = (dayMeals.length > 0) ? this.state.dailySummaries[dateStr] : null;
 
     const mealsCountEl = document.getElementById('dash-meals');
     if (mealsCountEl) mealsCountEl.textContent = dayMeals.length;
 
     const weightEl = document.getElementById('dash-weight');
     if (weightEl) {
-      const w = summary?.weight ?? this.state.userBody?.currentWeight;
-      weightEl.textContent = (w !== undefined && w !== null) ? `${w}` : '--';
+      if (dayMeals.length > 0) {
+        const w = summary?.weight ?? this.state.userBody?.currentWeight;
+        weightEl.textContent = (w !== undefined && w !== null) ? `${w}` : '--';
+      } else {
+        weightEl.textContent = '--';
+      }
     }
 
     const bpEl = document.getElementById('dash-bp');
     if (bpEl) {
-      if (summary?.bpSys && summary?.bpDia) {
-        bpEl.textContent = `${summary.bpSys}/${summary.bpDia}`;
-      } else if (this.state.userBody?.bloodPressureSystolic && this.state.userBody?.bloodPressureDiastolic) {
-        bpEl.textContent = `${this.state.userBody.bloodPressureSystolic}/${this.state.userBody.bloodPressureDiastolic}`;
+      if (dayMeals.length > 0) {
+        if (summary?.bpSys && summary?.bpDia) {
+          bpEl.textContent = `${summary.bpSys}/${summary.bpDia}`;
+        } else if (this.state.userBody?.bloodPressureSystolic && this.state.userBody?.bloodPressureDiastolic) {
+          bpEl.textContent = `${this.state.userBody.bloodPressureSystolic}/${this.state.userBody.bloodPressureDiastolic}`;
+        } else {
+          bpEl.textContent = '--';
+        }
       } else {
         bpEl.textContent = '--';
       }
@@ -956,7 +996,7 @@ itemsには写真に写っている個々のおかず・食材をそれぞれ列
     // 4. Render Daily Summary AI Advice & Measurements Card (#dash-daily-summary-section)
     const summarySecEl = document.getElementById('dash-daily-summary-section');
     if (summarySecEl) {
-      if (summary) {
+      if (dayMeals.length > 0 && summary) {
         const w = summary.weight ?? this.state.userBody?.currentWeight ?? '--';
         const sys = summary.bpSys ?? this.state.userBody?.bloodPressureSystolic;
         const dia = summary.bpDia ?? this.state.userBody?.bloodPressureDiastolic;
@@ -1349,6 +1389,7 @@ itemsには写真に写っている個々のおかず・食材をそれぞれ列
   async deleteMeal(id) {
     if (!confirm('この食事記録を削除しますか？')) return;
     this.state.mealHistory = this.state.mealHistory.filter(m => m.id !== id);
+    this.cleanOrphanDailySummaries();
     await this.saveToStorage();
     this.renderHistory();
     this.renderDashboard();
@@ -1409,6 +1450,9 @@ itemsには写真に写っている個々のおかず・食材をそれぞれ列
 
     // 履歴を日時の新しい順に再ソート
     this.state.mealHistory.sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp));
+
+    // 食事がなくなった日の古いサマリーを自動クリーンアップ
+    this.cleanOrphanDailySummaries();
 
     await this.saveToStorage();
     this.renderDetailModal(meal);
@@ -1563,6 +1607,7 @@ itemsには写真に写っている個々のおかず・食材をそれぞれ列
   async clearHistory() {
     if (!confirm('全ての食事記録を削除しますか？')) return;
     this.state.mealHistory = [];
+    this.state.dailySummaries = {};
     await this.saveToStorage();
     this.renderHistory();
     this.renderDashboard();
