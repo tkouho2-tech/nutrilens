@@ -8,7 +8,7 @@
   <meta http-equiv="Expires" content="0">
   <title>NutriLens — AI食事栄養分析アプリ</title>
   <meta name="description" content="食事の写真を撮るだけでAIがカロリーや栄養素を自動分析。毎日の健康管理をスマートにサポートします。">
-  <link rel="stylesheet" href="style.css?v=1.0.16">
+  <link rel="stylesheet" href="style.css?v=1.0.17">
 </head>
 <body>
 
@@ -22,7 +22,7 @@
       <div>
         <div style="display: flex; align-items: center; gap: 8px;">
           <div class="logo-text">NutriLens</div>
-          <span class="app-version-badge" id="app-version">v1.0.16</span>
+          <span class="app-version-badge" id="app-version">v1.0.17</span>
         </div>
         <div class="logo-subtitle">AI栄養分析</div>
       </div>
@@ -178,8 +178,11 @@
 
 
         <!-- Actions -->
-        <div class="result-actions">
-          <button class="btn btn-ghost" id="btn-reanalyze">
+        <div class="result-actions" style="display:flex;gap:10px;flex-wrap:wrap">
+          <button class="btn btn-ghost" id="btn-result-edit-date" onclick="App.openEditDateForResult()" style="flex:1">
+            🕒 記録日時を変更
+          </button>
+          <button class="btn btn-primary" id="btn-reanalyze" style="flex:1">
             🔄 別の写真を撮る
           </button>
         </div>
@@ -417,10 +420,11 @@
       <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin-bottom:16px">
         <span id="detail-health-badge" class="badge badge-success"></span>
         <span id="detail-time" style="font-size:12px;color:var(--text-muted)"></span>
-        <button id="btn-edit-date" class="btn btn-ghost" style="padding:4px 8px; font-size:11px;" onclick="App.toggleEditDate()">🕒 日時を変更</button>
-        <div id="edit-date-container" style="display:none; align-items:center; gap:8px;">
-          <input type="datetime-local" id="edit-date-input" class="form-input" style="padding:4px 8px; font-size:12px; width:auto;">
-          <button class="btn btn-primary" style="padding:4px 12px; font-size:12px;" onclick="App.saveNewDate()">保存</button>
+        <button id="btn-edit-date" class="btn btn-ghost" style="padding:4px 8px; font-size:11px;" onclick="App.toggleEditDate(true)">🕒 日時を変更</button>
+        <div id="edit-date-container" style="display:none; align-items:center; gap:8px; width:100%; margin-top:8px; background:rgba(255,255,255,0.04); padding:10px; border-radius:var(--radius-sm); border:1px solid var(--glass-border);">
+          <input type="datetime-local" id="edit-date-input" class="form-input" style="padding:6px 10px; font-size:13px; flex:1; min-width:180px;">
+          <button class="btn btn-primary" style="padding:6px 14px; font-size:12px;" onclick="App.saveNewDate()">保存</button>
+          <button class="btn btn-ghost" style="padding:6px 10px; font-size:12px;" onclick="App.toggleEditDate(false)">✕</button>
         </div>
       </div>
 
@@ -610,6 +614,6 @@
 <!-- ===== Toast Container ===== -->
 <div class="toast-container" id="toast-container"></div>
 
-<script src="app.js?v=1.0.16"></script>
+<script src="app.js?v=1.0.17"></script>
 </body>
 </html>

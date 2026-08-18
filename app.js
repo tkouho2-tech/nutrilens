@@ -2,7 +2,7 @@
 
 const App = {
   // Version
-  version: 'v1.0.16',
+  version: 'v1.0.17',
 
   // State
   state: {
@@ -14,6 +14,7 @@ const App = {
     imageMimeType: 'image/jpeg',
     currentResult: null,
     currentDetailId: null,
+    latestSavedMealId: null,
     mealHistory: [],
     dailySummaries: {},
     userBody: {
@@ -813,6 +814,7 @@ itemsには写真に写っている個々のおかず・食材をそれぞれ列
       imageDataUrl: this.state.imageDataUrl,
       ...this.state.currentResult,
     };
+    this.state.latestSavedMealId = meal.id;
     this.state.mealHistory.unshift(meal);
     await this.saveToStorage();
     
@@ -1036,6 +1038,82 @@ itemsには写真に写っている個々のおかず・食材をそれぞれ列
     this.showToast('食事記録を削除しました', 'info');
   },
 
+  // ===== Date Edit Helper =====
+  toDateTimeLocalString(timestamp) {
+    const d = new Date(timestamp);
+    if (isNaN(d.getTime())) return '';
+    const year = d.getFullYear();
+    const month = String(d.getMonth() + 1).padStart(2, '0');
+    const day = String(d.getDate()).padStart(2, '0');
+    const hours = String(d.getHours()).padStart(2, '0');
+    const minutes = String(d.getMinutes()).padStart(2, '0');
+    return `${year}-${month}-${day}T${hours}:${minutes}`;
+  },
+
+  toggleEditDate(show) {
+    const container = document.getElementById('edit-date-container');
+    const btn = document.getElementById('btn-edit-date');
+    if (!container) return;
+    const isCurrentlyVisible = container.style.display === 'flex' || container.style.display === 'block';
+    const nextState = (typeof show === 'boolean') ? show : !isCurrentlyVisible;
+
+    if (nextState) {
+      container.style.display = 'flex';
+      if (btn) btn.style.display = 'none';
+      const input = document.getElementById('edit-date-input');
+      if (input) input.focus();
+    } else {
+      container.style.display = 'none';
+      if (btn) btn.style.display = 'inline-flex';
+    }
+  },
+
+  async saveNewDate() {
+    if (!this.state.currentDetailId) return;
+    const input = document.getElementById('edit-date-input');
+    if (!input || !input.value) {
+      this.showToast('日時を選択してください', 'error');
+      return;
+    }
+
+    const newDate = new Date(input.value);
+    if (isNaN(newDate.getTime())) {
+      this.showToast('有効な日時を入力してください', 'error');
+      return;
+    }
+
+    const meal = this.state.mealHistory.find(m => m.id === this.state.currentDetailId);
+    if (!meal) {
+      this.showToast('対象の食事記録が見つかりません', 'error');
+      return;
+    }
+
+    meal.timestamp = newDate.toISOString();
+
+    // 履歴を日時の新しい順に再ソート
+    this.state.mealHistory.sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp));
+
+    await this.saveToStorage();
+    this.renderDetailModal(meal);
+    this.renderHistory();
+    this.renderDashboard();
+    this.toggleEditDate(false);
+    this.showToast('食事の日時を更新しました', 'success');
+  },
+
+  openEditDateForResult() {
+    let targetId = this.state.latestSavedMealId;
+    if (!targetId && this.state.mealHistory.length > 0) {
+      targetId = this.state.mealHistory[0].id;
+    }
+    if (!targetId) {
+      this.showToast('変更対象の食事記録がありません', 'error');
+      return;
+    }
+    this.openMealDetail(targetId);
+    setTimeout(() => this.toggleEditDate(true), 150);
+  },
+
   // ===== Meal Detail Modal =====
   openMealDetail(id) {
     const meal = this.state.mealHistory.find(m => m.id === id);
@@ -1055,6 +1133,13 @@ itemsには写真に写っている個々のおかず・食材をそれぞれ列
       year: 'numeric', month: 'long', day: 'numeric',
       hour: '2-digit', minute: '2-digit', weekday: 'short'
     });
+
+    // Reset date edit UI & set input value
+    this.toggleEditDate(false);
+    const dateInput = document.getElementById('edit-date-input');
+    if (dateInput) {
+      dateInput.value = this.toDateTimeLocalString(meal.timestamp);
+    }
 
     // Header
     document.getElementById('detail-food-name').textContent = meal.foodName || '不明な料理';
