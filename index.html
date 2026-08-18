@@ -8,7 +8,7 @@
   <meta http-equiv="Expires" content="0">
   <title>NutriLens — AI食事栄養分析アプリ</title>
   <meta name="description" content="食事の写真を撮るだけでAIがカロリーや栄養素を自動分析。毎日の健康管理をスマートにサポートします。">
-  <link rel="stylesheet" href="style.css?v=1.0.11">
+  <link rel="stylesheet" href="style.css?v=1.0.13">
 </head>
 <body>
 
@@ -22,7 +22,7 @@
       <div>
         <div style="display: flex; align-items: center; gap: 8px;">
           <div class="logo-text">NutriLens</div>
-          <span class="app-version-badge" id="app-version">v1.0.11</span>
+          <span class="app-version-badge" id="app-version">v1.0.13</span>
         </div>
         <div class="logo-subtitle">AI栄養分析</div>
       </div>
@@ -484,6 +484,81 @@
   </div>
 </div>
 
+<!-- ===== Daily Summary Modal ===== -->
+<div class="modal-overlay" id="daily-summary-modal" role="dialog" aria-modal="true">
+  <div class="modal" style="max-height:85vh; display:flex; flex-direction:column; overflow:hidden;">
+    
+    <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:16px;">
+      <h2 class="modal-title" id="daily-summary-date" style="margin:0; font-size:18px;">YYYY年MM月DD日 の総括</h2>
+      <button class="btn-close" onclick="App.closeDailySummaryModal()">×</button>
+    </div>
+
+    <div class="modal-body" style="overflow-y:auto; flex:1; padding-right:4px;">
+      <!-- Loading State -->
+      <div id="daily-summary-loading" style="display:none; text-align:center; padding:40px 0;">
+        <div class="spinner" style="width:40px;height:40px;border-width:3px;margin:0 auto 16px auto;"></div>
+        <div style="color:var(--text-muted);font-size:14px;">1日の食事データをAIが分析中...<br>（約10〜15秒かかります）</div>
+      </div>
+
+      <!-- Result State -->
+      <div id="daily-summary-result" style="display:none;">
+        
+        <div class="glass-card" style="padding:16px 20px; text-align:center; margin-bottom:14px">
+          <div style="font-size:13px; color:var(--text-muted); margin-bottom:4px;">1日の合計摂取カロリー</div>
+          <div style="font-size:32px; font-weight:700; font-family:Outfit, sans-serif; color:var(--primary);">
+            <span id="daily-total-calories">0</span><span style="font-size:14px; color:var(--text-muted); font-weight:normal; margin-left:4px;">kcal</span>
+          </div>
+          <div id="daily-calories-eval" class="badge" style="margin-top:8px;"></div>
+        </div>
+
+        <div class="glass-card" style="padding:16px 20px; margin-bottom:14px">
+          <div class="pfc-title" style="margin-bottom:12px">1日のPFCバランス</div>
+          <div class="pfc-bar-container">
+            <div id="daily-pfc-protein" class="pfc-segment protein" style="width:0%"></div>
+            <div id="daily-pfc-fat"     class="pfc-segment fat"     style="width:0%"></div>
+            <div id="daily-pfc-carbs"   class="pfc-segment carbs"   style="width:0%"></div>
+          </div>
+          <div class="pfc-legend">
+            <div class="pfc-legend-item">
+              <div class="pfc-dot protein"></div>
+              <span class="pfc-label">P(タンパク質)</span>
+              <span class="pfc-amount" id="daily-protein">—</span>
+            </div>
+            <div class="pfc-legend-item">
+              <div class="pfc-dot fat"></div>
+              <span class="pfc-label">F(脂質)</span>
+              <span class="pfc-amount" id="daily-fat">—</span>
+            </div>
+            <div class="pfc-legend-item">
+              <div class="pfc-dot carbs"></div>
+              <span class="pfc-label">C(炭水化物)</span>
+              <span class="pfc-amount" id="daily-carbs">—</span>
+            </div>
+          </div>
+        </div>
+
+        <div class="glass-card" style="padding:16px 20px; margin-bottom:14px">
+          <div class="pfc-title" style="margin-bottom:12px">AI 総合アドバイス</div>
+          <div style="display:flex; gap:12px; align-items:flex-start;">
+            <div class="ai-avatar">🤖</div>
+            <div class="ai-comment-text" id="daily-ai-comment" style="line-height:1.6;"></div>
+          </div>
+          <div style="text-align:right; margin-top:8px;">
+            <button class="btn btn-ghost btn-icon" id="btn-speak-daily" title="読み上げる" onclick="App.speak(document.getElementById('daily-ai-comment').textContent)">🔊</button>
+          </div>
+        </div>
+        
+        <div style="text-align:center; margin-top:16px;">
+           <button class="btn btn-ghost" id="btn-reanalyze-daily" style="font-size:12px;">
+             🔄 AIに再分析させる
+           </button>
+        </div>
+
+      </div>
+    </div>
+  </div>
+</div>
+
 <!-- ===== API Settings Modal ===== -->
 <div class="modal-overlay" id="api-modal" role="dialog" aria-modal="true" aria-labelledby="modal-title">
   <div class="modal">
@@ -529,6 +604,6 @@
 <!-- ===== Toast Container ===== -->
 <div class="toast-container" id="toast-container"></div>
 
-<script src="app.js?v=1.0.7"></script>
+<script src="app.js?v=1.0.13"></script>
 </body>
 </html>

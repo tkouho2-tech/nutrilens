@@ -2,7 +2,7 @@
 
 const App = {
   // Version
-  version: 'v1.0.11',
+  version: 'v1.0.13',
 
   // State
   state: {
@@ -14,6 +14,7 @@ const App = {
     imageMimeType: 'image/jpeg',
     currentResult: null,
     mealHistory: [],
+    dailySummaries: {},
     userBody: {
       currentWeight: 65,
       targetWeight: 60,
@@ -81,6 +82,7 @@ const App = {
 
       if (data) {
         this.state.mealHistory = data.mealHistory || [];
+        this.state.dailySummaries = data.dailySummaries || {};
         this.state.goals = data.goals || this.state.goals;
         this.state.userBody = data.userBody || this.state.userBody;
         this.state.apiKey = data.apiKey || '';
@@ -94,6 +96,7 @@ const App = {
   async saveToStorage() {
     const data = {
       mealHistory: this.state.mealHistory,
+      dailySummaries: this.state.dailySummaries,
       goals: this.state.goals,
       userBody: this.state.userBody,
       apiKey: this.state.apiKey,
@@ -954,28 +957,50 @@ itemsには写真に写っている個々のおかず・食材をそれぞれ列
       return;
     }
 
-    list.innerHTML = this.state.mealHistory.map((meal, idx) => {
-      const date = new Date(meal.timestamp);
-      const timeStr = date.toLocaleString('ja-JP', {
-        month: 'short', day: 'numeric',
-        hour: '2-digit', minute: '2-digit'
-      });
-      const thumbHtml = meal.imageDataUrl
-        ? `<img src="${meal.imageDataUrl}" class="history-thumb" alt="${meal.foodName}">`
-        : `<div class="history-thumb-placeholder">🍽️</div>`;
+    // グループ化
+    const groups = {};
+    this.state.mealHistory.forEach(meal => {
+      const dateObj = new Date(meal.timestamp);
+      const d = dateObj.getFullYear() + '-' + String(dateObj.getMonth() + 1).padStart(2, '0') + '-' + String(dateObj.getDate()).padStart(2, '0');
+      if (!groups[d]) groups[d] = [];
+      groups[d].push(meal);
+    });
 
-      return `
-        <div class="history-item glass-card" data-id="${meal.id}" onclick="App.openMealDetail(${meal.id})" style="cursor:pointer">
-          ${thumbHtml}
-          <div class="history-info">
-            <div class="history-name">${meal.foodName}</div>
-            <div class="history-time">${timeStr}</div>
-          </div>
-          <div class="history-calorie">${meal.calories}<span> kcal</span></div>
-          <button class="btn btn-ghost btn-icon" onclick="event.stopPropagation();App.deleteMeal(${meal.id})" title="削除" style="margin-left:8px">🗑️</button>
-        </div>`;
-    }).join('');
+    let html = '';
+    const sortedDates = Object.keys(groups).sort((a, b) => b.localeCompare(a));
 
+    sortedDates.forEach(dateStr => {
+      const dateObj = new Date(dateStr);
+      const displayDate = dateObj.toLocaleDateString('ja-JP', { year: 'numeric', month: 'short', day: 'numeric', weekday: 'short' });
+      
+      html += `
+        <div class="history-date-header" style="display:flex; justify-content:space-between; align-items:center; margin: 24px 0 12px 0; border-bottom: 1px solid var(--glass-border); padding-bottom: 8px;">
+          <h3 style="margin:0; font-size:16px; color:var(--text-light);">${displayDate}</h3>
+          <button class="btn btn-ghost" style="padding: 4px 12px; font-size:12px; border-radius:12px; background: rgba(0, 229, 255, 0.1); color: var(--primary);" onclick="App.openDailySummaryModal('${dateStr}')">📊 1日の総括</button>
+        </div>
+      `;
+
+      html += groups[dateStr].map(meal => {
+        const mealDate = new Date(meal.timestamp);
+        const timeStr = mealDate.toLocaleTimeString('ja-JP', { hour: '2-digit', minute: '2-digit' });
+        const thumbHtml = meal.imageDataUrl
+          ? `<img src="${meal.imageDataUrl}" class="history-thumb" alt="${meal.foodName}">`
+          : `<div class="history-thumb-placeholder">🍽️</div>`;
+
+        return `
+          <div class="history-item glass-card" data-id="${meal.id}" onclick="App.openMealDetail(${meal.id})" style="cursor:pointer">
+            ${thumbHtml}
+            <div class="history-info">
+              <div class="history-name">${meal.foodName}</div>
+              <div class="history-time">${timeStr}</div>
+            </div>
+            <div class="history-calorie">${meal.calories}<span> kcal</span></div>
+            <button class="btn btn-ghost btn-icon" onclick="event.stopPropagation();App.deleteMeal(${meal.id})" title="削除" style="margin-left:8px">🗑️</button>
+          </div>`;
+      }).join('');
+    });
+
+    list.innerHTML = html;
   },
 
   async deleteMeal(id) {
@@ -1115,6 +1140,180 @@ itemsには写真に写っている個々のおかず・食材をそれぞれ列
     this.renderHistory();
     this.renderDashboard();
     this.showToast('食事記録をリセットしました', 'info');
+  },
+
+  // ===== Daily Summary =====
+  async openDailySummaryModal(dateStr) {
+    const modal = document.getElementById('daily-summary-modal');
+    modal.classList.add('active');
+    const dateObj = new Date(dateStr);
+    const displayDate = dateObj.toLocaleDateString('ja-JP', { year: 'numeric', month: 'short', day: 'numeric', weekday: 'short' });
+    document.getElementById('daily-summary-date').textContent = `${displayDate} の総括`;
+    
+    const reanalyzeBtn = document.getElementById('btn-reanalyze-daily');
+    reanalyzeBtn.onclick = () => this.analyzeDaily(dateStr, true);
+
+    const summary = this.state.dailySummaries[dateStr];
+    if (summary) {
+      this.renderDailySummaryResult(summary);
+    } else {
+      await this.analyzeDaily(dateStr, false);
+    }
+  },
+
+  closeDailySummaryModal() {
+    document.getElementById('daily-summary-modal').classList.remove('active');
+  },
+
+  renderDailySummaryResult(summary) {
+    document.getElementById('daily-summary-loading').style.display = 'none';
+    document.getElementById('daily-summary-result').style.display = 'block';
+
+    document.getElementById('daily-total-calories').textContent = summary.totalCalories || 0;
+    
+    const badge = document.getElementById('daily-calories-eval');
+    if (summary.goalDiff > 200) {
+      badge.textContent = 'カロリーオーバー気味';
+      badge.className = 'badge badge-warning';
+    } else if (summary.goalDiff < -200) {
+      badge.textContent = 'カロリー不足気味';
+      badge.className = 'badge badge-warning';
+    } else {
+      badge.textContent = '目標達成ペース！';
+      badge.className = 'badge badge-success';
+    }
+
+    const { protein = 0, fat = 0, carbs = 0 } = summary.pfc || {};
+    const pfcTotal = protein * 4 + fat * 9 + carbs * 4;
+    const pPct = pfcTotal > 0 ? (protein * 4 / pfcTotal * 100) : 33;
+    const fPct = pfcTotal > 0 ? (fat * 9 / pfcTotal * 100) : 33;
+    const cPct = pfcTotal > 0 ? (carbs * 4 / pfcTotal * 100) : 34;
+
+    document.getElementById('daily-protein').textContent = `${protein}g`;
+    document.getElementById('daily-fat').textContent = `${fat}g`;
+    document.getElementById('daily-carbs').textContent = `${carbs}g`;
+    
+    setTimeout(() => {
+      document.getElementById('daily-pfc-protein').style.width = `${pPct}%`;
+      document.getElementById('daily-pfc-fat').style.width = `${fPct}%`;
+      document.getElementById('daily-pfc-carbs').style.width = `${cPct}%`;
+    }, 150);
+
+    document.getElementById('daily-ai-comment').textContent = summary.aiComment || 'アドバイスがありません。';
+  },
+
+  async analyzeDaily(dateStr, force = false) {
+    if (!this.state.apiKey) {
+      this.showToast('Gemini APIキーを設定してください', 'error');
+      this.closeDailySummaryModal();
+      this.openApiModal();
+      return;
+    }
+
+    const meals = this.state.mealHistory.filter(m => {
+      const dateObj = new Date(m.timestamp);
+      const d = dateObj.getFullYear() + '-' + String(dateObj.getMonth() + 1).padStart(2, '0') + '-' + String(dateObj.getDate()).padStart(2, '0');
+      return d === dateStr;
+    });
+
+    if (meals.length === 0) {
+      this.showToast('この日の食事記録がありません。', 'error');
+      this.closeDailySummaryModal();
+      return;
+    }
+
+    document.getElementById('daily-summary-loading').style.display = 'block';
+    document.getElementById('daily-summary-result').style.display = 'none';
+
+    let totalCalories = 0;
+    let totalPFC = { protein: 0, fat: 0, carbs: 0 };
+    let mealsSummaryText = '';
+
+    meals.forEach(m => {
+      totalCalories += (m.calories || 0);
+      totalPFC.protein += (m.pfc?.protein || 0);
+      totalPFC.fat += (m.pfc?.fat || 0);
+      totalPFC.carbs += (m.pfc?.carbs || 0);
+      mealsSummaryText += `・${m.foodName} (${m.calories}kcal, P:${m.pfc?.protein}g, F:${m.pfc?.fat}g, C:${m.pfc?.carbs}g) - AI評価: ${m.aiComment}\n`;
+    });
+
+    const goalCal = this.state.goals?.calories || 1800;
+    const goalDiff = totalCalories - goalCal;
+    const diffText = goalDiff > 0 ? `+${goalDiff}` : goalDiff;
+
+    const ub = this.state.userBody || {};
+    const curW = ub.currentWeight || 65;
+    const tarW = ub.targetWeight || 60;
+    let mode = '維持';
+    if (tarW < curW) mode = '減量';
+    if (tarW > curW) mode = '増量';
+
+    const prompt = `あなたはプロの栄養士AIです。以下のユーザーの「1日の食事記録」を総合的に分析し、アドバイスを生成してください。
+
+【ユーザー情報】
+目標: ${mode} (現在${curW}kg -> 目標${tarW}kg)
+1日の目標摂取カロリー: ${goalCal}kcal
+
+【本日の食事データ】
+総摂取カロリー: ${totalCalories}kcal (目標との差: ${diffText}kcal)
+合計PFC: タンパク質 ${totalPFC.protein}g, 脂質 ${totalPFC.fat}g, 炭水化物 ${totalPFC.carbs}g
+食べたもの一覧と個別の評価:
+${mealsSummaryText}
+
+【指示】
+これらのデータを元に、1日の総括となるAIアドバイス（日本語、4〜5文程度）を作成してください。カロリーやPFCのバランス、良かった点、翌日以降の改善点（不足している栄養素や食べすぎへの対策など）を具体的に含めてください。
+以下のJSON形式のみで出力してください。
+
+{
+  "aiComment": "ここへ総括アドバイスを記述"
+}`;
+
+    try {
+      let model = this.state.selectedModel;
+      if (!model || model === 'auto') model = 'gemini-1.5-flash';
+      
+      const response = await fetch(
+        `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${this.state.apiKey}`,
+        {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            contents: [{ parts: [{ text: prompt }] }],
+            generationConfig: { responseMimeType: 'application/json', temperature: 0.2 }
+          })
+        }
+      );
+
+      if (!response.ok) throw new Error('API request failed');
+      const data = await response.json();
+      const text = data.candidates?.[0]?.content?.parts?.[0]?.text;
+      if (!text) throw new Error('No text returned');
+
+      let cleanText = text.trim();
+      cleanText = cleanText.replace(/^```json\s*/i, '').replace(/^```\s*/, '').replace(/\s*```$/, '');
+      const parsed = JSON.parse(cleanText);
+
+      const summary = {
+        totalCalories,
+        pfc: totalPFC,
+        goalDiff,
+        aiComment: parsed.aiComment
+      };
+
+      this.state.dailySummaries[dateStr] = summary;
+      await this.saveToStorage();
+      this.renderDailySummaryResult(summary);
+      
+      if (force) {
+        this.showToast('再分析が完了しました', 'success');
+      }
+
+    } catch (err) {
+      console.error('Daily analysis error:', err);
+      document.getElementById('daily-summary-loading').style.display = 'none';
+      this.closeDailySummaryModal();
+      this.showToast(`分析エラー: ${err.message}`, 'error');
+    }
   },
 
   // ===== Goal Settings =====
