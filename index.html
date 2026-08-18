@@ -8,7 +8,7 @@
   <meta http-equiv="Expires" content="0">
   <title>NutriLens — AI食事栄養分析アプリ</title>
   <meta name="description" content="食事の写真を撮るだけでAIがカロリーや栄養素を自動分析。毎日の健康管理をスマートにサポートします。">
-  <link rel="stylesheet" href="style.css?v=1.0.14">
+  <link rel="stylesheet" href="style.css?v=1.0.16">
 </head>
 <body>
 
@@ -22,7 +22,7 @@
       <div>
         <div style="display: flex; align-items: center; gap: 8px;">
           <div class="logo-text">NutriLens</div>
-          <span class="app-version-badge" id="app-version">v1.0.14</span>
+          <span class="app-version-badge" id="app-version">v1.0.16</span>
         </div>
         <div class="logo-subtitle">AI栄養分析</div>
       </div>
@@ -417,6 +417,11 @@
       <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin-bottom:16px">
         <span id="detail-health-badge" class="badge badge-success"></span>
         <span id="detail-time" style="font-size:12px;color:var(--text-muted)"></span>
+        <button id="btn-edit-date" class="btn btn-ghost" style="padding:4px 8px; font-size:11px;" onclick="App.toggleEditDate()">🕒 日時を変更</button>
+        <div id="edit-date-container" style="display:none; align-items:center; gap:8px;">
+          <input type="datetime-local" id="edit-date-input" class="form-input" style="padding:4px 8px; font-size:12px; width:auto;">
+          <button class="btn btn-primary" style="padding:4px 12px; font-size:12px;" onclick="App.saveNewDate()">保存</button>
+        </div>
       </div>
 
       <!-- Calorie highlight -->
@@ -586,10 +591,11 @@
     <div class="form-group" style="margin-top:14px">
       <label class="form-label" for="api-model-select">使用モデル</label>
       <select class="form-select" id="api-model-select">
-        <option value="auto">⚡ 自動選択（推奨 / 利用可能な最新モデル）</option>
-        <option value="gemini-2.5-flash">Gemini 2.5 Flash</option>
+        <option value="auto">⚡ 自動選択（推奨 / 最新・最速モデルを自動判別）</option>
+        <option value="gemini-2.5-flash">Gemini 2.5 Flash（最新・高速推奨）</option>
+        <option value="gemini-2.5-pro">Gemini 2.5 Pro（最新・最高精度）</option>
         <option value="gemini-2.0-flash">Gemini 2.0 Flash</option>
-        <option value="gemini-1.5-flash-latest">Gemini 1.5 Flash (Latest)</option>
+        <option value="gemini-2.0-flash-lite">Gemini 2.0 Flash Lite（軽量）</option>
         <option value="gemini-1.5-flash">Gemini 1.5 Flash</option>
         <option value="gemini-1.5-pro">Gemini 1.5 Pro</option>
       </select>
@@ -604,6 +610,6 @@
 <!-- ===== Toast Container ===== -->
 <div class="toast-container" id="toast-container"></div>
 
-<script src="app.js?v=1.0.14"></script>
+<script src="app.js?v=1.0.16"></script>
 </body>
 </html>

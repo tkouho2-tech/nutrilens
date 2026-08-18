@@ -2,7 +2,7 @@
 
 const App = {
   // Version
-  version: 'v1.0.14',
+  version: 'v1.0.16',
 
   // State
   state: {
@@ -13,6 +13,7 @@ const App = {
     imageDataUrl: null,
     imageMimeType: 'image/jpeg',
     currentResult: null,
+    currentDetailId: null,
     mealHistory: [],
     dailySummaries: {},
     userBody: {
@@ -347,7 +348,12 @@ const App = {
     }
   },
 
-  async getAvailableModels(apiKey) {
+  _cachedModels: null,
+
+  async getAvailableModels(apiKey, force = false) {
+    if (!force && this._cachedModels && this._cachedModels.length > 0) {
+      return this._cachedModels;
+    }
     try {
       const response = await fetch(
         `https://generativelanguage.googleapis.com/v1beta/models?key=${apiKey}`
@@ -363,22 +369,155 @@ const App = {
       if (!data.models || !Array.isArray(data.models)) return null;
 
       // generateContent をサポートし、tts/embedding/audio等の非Vision・特殊モデルを除外
-      return data.models
+      const available = data.models
         .filter(m => {
           if (!m.supportedGenerationMethods || !m.supportedGenerationMethods.includes('generateContent')) {
             return false;
           }
-          const name = m.name.toLowerCase();
-          if (name.includes('tts') || name.includes('embedding') || name.includes('imagen') || name.includes('audio') || name.includes('realtime') || name.includes('bison')) {
+          const name = (m.name || '').toLowerCase();
+          if (name.includes('tts') || name.includes('embedding') || name.includes('imagen') || 
+              name.includes('audio') || name.includes('realtime') || name.includes('bison') ||
+              name.includes('aqa') || name.includes('text-embedding')) {
             return false;
           }
           return true;
         })
         .map(m => m.name.replace(/^models\//, ''));
+
+      this._cachedModels = available;
+      return available;
     } catch (e) {
       console.warn('Geminiモデルリスト取得失敗:', e);
       return null;
     }
+  },
+
+  async executeGeminiGenerate({ prompt, base64Image = null, mimeType = 'image/jpeg', temperature = 0.1 }) {
+    // 優先推奨モデル順（Gemini 2.5 -> 2.0 -> 1.5）
+    const preferredOrder = [
+      'gemini-2.5-flash',
+      'gemini-2.5-pro',
+      'gemini-2.0-flash',
+      'gemini-2.0-flash-lite',
+      'gemini-1.5-flash',
+      'gemini-1.5-flash-latest',
+      'gemini-1.5-pro',
+      'gemini-1.5-pro-latest'
+    ];
+
+    let modelsToTry = [];
+
+    // 1. ユーザーが特定のモデルを明示選択している場合、それを先頭に
+    if (this.state.selectedModel && this.state.selectedModel !== 'auto') {
+      modelsToTry.push(this.state.selectedModel);
+    }
+
+    // 2. APIから動的に利用可能モデルを取得
+    const available = await this.getAvailableModels(this.state.apiKey);
+    if (available && available.length > 0) {
+      preferredOrder.forEach(p => {
+        if (available.includes(p) && !modelsToTry.includes(p)) {
+          modelsToTry.push(p);
+        }
+      });
+      available.forEach(m => {
+        if (!modelsToTry.includes(m)) {
+          modelsToTry.push(m);
+        }
+      });
+    }
+
+    // 3. 静的フォールバック
+    preferredOrder.forEach(m => {
+      if (!modelsToTry.includes(m)) {
+        modelsToTry.push(m);
+      }
+    });
+
+    let lastError = null;
+    const attemptedModels = [];
+
+    // parts構築
+    const parts = [{ text: prompt }];
+    if (base64Image) {
+      parts.push({
+        inlineData: {
+          mimeType: mimeType || 'image/jpeg',
+          data: base64Image
+        }
+      });
+    }
+
+    for (const modelName of modelsToTry) {
+      attemptedModels.push(modelName);
+      try {
+        const response = await fetch(
+          `https://generativelanguage.googleapis.com/v1beta/models/${modelName}:generateContent?key=${this.state.apiKey}`,
+          {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              contents: [{ parts }],
+              generationConfig: {
+                responseMimeType: 'application/json',
+                temperature: temperature
+              }
+            })
+          }
+        );
+
+        const resText = await response.text();
+
+        if (!response.ok) {
+          let msg = `HTTPエラー ${response.status}`;
+          try {
+            const errJson = JSON.parse(resText);
+            msg = errJson?.error?.message || msg;
+          } catch (e) {}
+
+          console.warn(`Geminiモデル [${modelName}] 利用不可 (${msg})。フォールバックを試みます...`);
+          lastError = new Error(`モデル [${modelName}]: ${msg}`);
+          continue;
+        }
+
+        let data;
+        try {
+          data = JSON.parse(resText);
+        } catch (e) {
+          console.warn(`モデル [${modelName}] レスポンスJSONパース失敗。フォールバックを試みます...`);
+          lastError = new Error(`モデル [${modelName}] レスポンス形式エラー`);
+          continue;
+        }
+
+        const text = data.candidates?.[0]?.content?.parts?.[0]?.text;
+        if (!text) {
+          console.warn(`モデル [${modelName}] からテキスト取得失敗。フォールバックを試みます...`);
+          lastError = new Error(`モデル [${modelName}]: テキスト取得失敗`);
+          continue;
+        }
+
+        // マークダウン装飾（```json ... ```）の除去とJSON抽出
+        let cleanText = text.trim();
+        cleanText = cleanText.replace(/^```json\s*/i, '').replace(/^```\s*/, '').replace(/\s*```$/, '');
+        const jsonMatch = cleanText.match(/\{[\s\S]*\}/);
+        const jsonStr = jsonMatch ? jsonMatch[0] : cleanText;
+
+        try {
+          return JSON.parse(jsonStr);
+        } catch (parseErr) {
+          console.warn(`モデル [${modelName}] JSON構文解析失敗:`, parseErr);
+          lastError = new Error(`モデル [${modelName}]: JSON構文解析失敗`);
+          continue;
+        }
+
+      } catch (err) {
+        console.warn(`モデル [${modelName}] 呼び出し例外:`, err.message);
+        lastError = err;
+        continue;
+      }
+    }
+
+    throw lastError || new Error(`利用可能なGeminiモデルが見つかりませんでした (試行: ${attemptedModels.slice(0, 3).join(', ')})`);
   },
 
   async callGeminiApi(base64Image) {
@@ -432,127 +571,12 @@ itemsには写真に写っている個々のおかず・食材をそれぞれ列
   "aiComment": "この食事についての健康・目標アドバイスと栄養素の効果（日本語、3〜4文程度）"
 }`;
 
-    const fallbackCandidates = [
-      'gemini-2.0-flash',
-      'gemini-1.5-flash',
-      'gemini-2.0-flash-lite',
-      'gemini-1.5-pro'
-    ];
-
-    let modelsToTry = [];
-
-    if (this.state.selectedModel && this.state.selectedModel !== 'auto') {
-      modelsToTry.push(this.state.selectedModel);
-      fallbackCandidates.forEach(m => {
-        if (!modelsToTry.includes(m)) modelsToTry.push(m);
-      });
-    } else {
-      const available = await this.getAvailableModels(this.state.apiKey);
-      if (available && available.length > 0) {
-        const priorityOrder = [
-          'gemini-2.0-flash',
-          'gemini-1.5-flash',
-          'gemini-2.0-flash-lite',
-          'gemini-1.5-pro'
-        ];
-        priorityOrder.forEach(p => {
-          if (available.includes(p) && !modelsToTry.includes(p)) {
-            modelsToTry.push(p);
-          }
-        });
-        available.forEach(m => {
-          if (!modelsToTry.includes(m)) modelsToTry.push(m);
-        });
-      }
-
-      if (modelsToTry.length === 0) {
-        modelsToTry = [...fallbackCandidates];
-      }
-    }
-
-    let lastError = null;
-
-    for (const modelName of modelsToTry) {
-      try {
-        const response = await fetch(
-          `https://generativelanguage.googleapis.com/v1beta/models/${modelName}:generateContent?key=${this.state.apiKey}`,
-          {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-              contents: [{
-                parts: [
-                  { text: prompt },
-                  {
-                    inlineData: {
-                      mimeType: this.state.imageMimeType || 'image/jpeg',
-                      data: base64Image
-                    }
-                  }
-                ]
-              }],
-              generationConfig: {
-                responseMimeType: 'application/json',
-                temperature: 0.1
-              }
-            })
-          }
-        );
-
-        const resText = await response.text();
-
-        if (!response.ok) {
-          let msg = `HTTPエラー ${response.status}`;
-          try {
-            const errJson = JSON.parse(resText);
-            msg = errJson?.error?.message || msg;
-          } catch (e) {
-            // HTMLや非JSONの場合
-          }
-
-          console.warn(`Geminiモデル [${modelName}] 利用不可 (${msg})。フォールバックを試みます...`);
-          lastError = new Error(`モデル [${modelName}]: ${msg}`);
-          continue;
-        }
-
-        let data;
-        try {
-          data = JSON.parse(resText);
-        } catch (e) {
-          console.warn(`モデル [${modelName}] のレスポンスJSONパース失敗。フォールバックを試みます...`);
-          lastError = new Error(`モデル [${modelName}] レスポンス解析エラー`);
-          continue;
-        }
-
-        const text = data.candidates?.[0]?.content?.parts?.[0]?.text;
-        if (!text) {
-          console.warn(`モデル [${modelName}] からテキストが得られませんでした。フォールバックを試みます...`);
-          lastError = new Error(`モデル [${modelName}]: テキスト取得失敗`);
-          continue;
-        }
-
-        // マークダウン装飾（```json ... ```）の除去とJSON抽出
-        let cleanText = text.trim();
-        cleanText = cleanText.replace(/^```json\s*/i, '').replace(/^```\s*/, '').replace(/\s*```$/, '');
-        const jsonMatch = cleanText.match(/\{[\s\S]*\}/);
-        const jsonStr = jsonMatch ? jsonMatch[0] : cleanText;
-
-        try {
-          return JSON.parse(jsonStr);
-        } catch (parseErr) {
-          console.warn(`モデル [${modelName}] JSON構文解析失敗:`, parseErr);
-          lastError = new Error(`モデル [${modelName}]: JSONの構造解析に失敗しました`);
-          continue;
-        }
-
-      } catch (err) {
-        console.warn(`モデル [${modelName}] 呼び出し例外:`, err.message);
-        lastError = err;
-        continue;
-      }
-    }
-
-    throw lastError || new Error('利用可能なGeminiモデルが見つかりませんでした。APIキーまたはモデル設定をご確認ください。');
+    return await this.executeGeminiGenerate({
+      prompt,
+      base64Image,
+      mimeType: this.state.imageMimeType || 'image/jpeg',
+      temperature: 0.1
+    });
   },
 
   // ===== Result Rendering =====
@@ -1016,6 +1040,7 @@ itemsには写真に写っている個々のおかず・食材をそれぞれ列
   openMealDetail(id) {
     const meal = this.state.mealHistory.find(m => m.id === id);
     if (!meal) return;
+    this.state.currentDetailId = id;
     this.renderDetailModal(meal);
     document.getElementById('detail-modal').classList.add('active');
   },
@@ -1269,77 +1294,16 @@ ${mealsSummaryText}
 }`;
 
     try {
-      const fallbackCandidates = [
-        'gemini-2.0-flash',
-        'gemini-1.5-flash',
-        'gemini-2.0-flash-lite',
-        'gemini-1.5-pro'
-      ];
-      
-      let modelsToTry = [];
-      if (this.state.selectedModel && this.state.selectedModel !== 'auto') {
-        modelsToTry.push(this.state.selectedModel);
-        fallbackCandidates.forEach(m => {
-          if (!modelsToTry.includes(m)) modelsToTry.push(m);
-        });
-      } else {
-        modelsToTry = [...fallbackCandidates];
-      }
-
-      let response = null;
-      let lastErrorText = 'API request failed';
-
-      for (const modelName of modelsToTry) {
-        try {
-          const res = await fetch(
-            `https://generativelanguage.googleapis.com/v1beta/models/${modelName}:generateContent?key=${this.state.apiKey}`,
-            {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({
-                contents: [{ parts: [{ text: prompt }] }],
-                generationConfig: { responseMimeType: 'application/json', temperature: 0.2 }
-              })
-            }
-          );
-          
-          if (!res.ok) {
-            lastErrorText = await res.text();
-            console.warn(`Model ${modelName} failed:`, lastErrorText);
-            continue;
-          }
-          response = res;
-          break;
-        } catch (e) {
-          console.warn(`Model ${modelName} exception:`, e);
-          lastErrorText = e.message;
-        }
-      }
-
-      if (!response) {
-        let msg = 'すべてのモデルでAPIリクエストが失敗しました';
-        try {
-          const errJson = JSON.parse(lastErrorText);
-          msg = errJson?.error?.message || msg;
-        } catch(e){
-          msg = lastErrorText || msg;
-        }
-        throw new Error(msg);
-      }
-
-      const data = await response.json();
-      const text = data.candidates?.[0]?.content?.parts?.[0]?.text;
-      if (!text) throw new Error('No text returned from API');
-
-      let cleanText = text.trim();
-      cleanText = cleanText.replace(/^```json\s*/i, '').replace(/^```\s*/, '').replace(/\s*```$/, '');
-      const parsed = JSON.parse(cleanText);
+      const parsed = await this.executeGeminiGenerate({
+        prompt,
+        temperature: 0.2
+      });
 
       const summary = {
         totalCalories,
         pfc: totalPFC,
         goalDiff,
-        aiComment: parsed.aiComment
+        aiComment: parsed.aiComment || '本日の食事記録から分析を完了しました。'
       };
 
       this.state.dailySummaries[dateStr] = summary;
@@ -1485,6 +1449,9 @@ ${mealsSummaryText}
     if (modelSelect) {
       modelSelect.value = this.state.selectedModel || 'auto';
     }
+    if (this.state.apiKey) {
+      this.getAvailableModels(this.state.apiKey).catch(() => {});
+    }
     setTimeout(() => input.focus(), 100);
   },
 
@@ -1503,6 +1470,7 @@ ${mealsSummaryText}
       this.state.selectedModel = modelSelect.value || 'auto';
     }
     this.state.apiKey = key;
+    this._cachedModels = null; // キャッシュクリア
     await this.saveToStorage();
     this.closeApiModal();
     const keyStatus = document.getElementById('key-status');
