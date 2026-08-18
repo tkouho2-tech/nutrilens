@@ -8,7 +8,7 @@
   <meta http-equiv="Expires" content="0">
   <title>NutriLens — AI食事栄養分析アプリ</title>
   <meta name="description" content="食事の写真を撮るだけでAIがカロリーや栄養素を自動分析。毎日の健康管理をスマートにサポートします。">
-  <link rel="stylesheet" href="style.css?v=1.0.17">
+  <link rel="stylesheet" href="style.css?v=1.0.18">
 </head>
 <body>
 
@@ -22,7 +22,7 @@
       <div>
         <div style="display: flex; align-items: center; gap: 8px;">
           <div class="logo-text">NutriLens</div>
-          <span class="app-version-badge" id="app-version">v1.0.17</span>
+          <span class="app-version-badge" id="app-version">v1.0.18</span>
         </div>
         <div class="logo-subtitle">AI栄養分析</div>
       </div>
@@ -260,24 +260,55 @@
       <div class="section-title"><span class="icon">⚖️</span>体重＆身体目標設定</div>
       <div class="glass-card goal-card">
         <p style="font-size:13px;color:var(--text-muted);margin:-4px 0 16px 0">
-          現在の体重と目標体重を入力するだけで、最適なカロリーと栄養素(PFC)を自動計算します。
+          生年月日・性別・体重・血圧を設定すると、あなたに最適化されたカロリー・PFCおよび健康アドバイスをAIが分析します。
         </p>
+
+        <!-- Profile Inputs (Birthdate & Gender) -->
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:16px">
+          <div class="form-group">
+            <label class="form-label" for="user-birthdate">📅 生年月日 <span id="user-age-preview" style="font-size:11px;color:var(--primary);margin-left:4px"></span></label>
+            <input type="date" class="form-input" id="user-birthdate" onchange="App.onBirthdateChange()">
+          </div>
+          <div class="form-group">
+            <label class="form-label" for="user-gender">⚧️ 性別</label>
+            <select class="form-select" id="user-gender" onchange="App.calculateGoalsFromWeight()">
+              <option value="male" selected>男性</option>
+              <option value="female">女性</option>
+              <option value="other">その他</option>
+            </select>
+          </div>
+        </div>
 
         <!-- Body Weight Inputs -->
         <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:16px">
           <div class="form-group">
             <label class="form-label" for="user-current-weight">⚖️ 現在の体重 (kg)</label>
-            <input type="number" class="form-input" id="user-current-weight" min="30" max="200" step="0.5" placeholder="65">
+            <input type="number" class="form-input" id="user-current-weight" min="30" max="200" step="0.1" placeholder="65.0" oninput="App.calculateGoalsFromWeight()">
           </div>
           <div class="form-group">
             <label class="form-label" for="user-target-weight">🎯 目標体重 (kg)</label>
-            <input type="number" class="form-input" id="user-target-weight" min="30" max="200" step="0.5" placeholder="60">
+            <input type="number" class="form-input" id="user-target-weight" min="30" max="200" step="0.1" placeholder="60.0" oninput="App.calculateGoalsFromWeight()">
+          </div>
+        </div>
+
+        <!-- Blood Pressure Inputs -->
+        <div style="margin-bottom:16px">
+          <label class="form-label">💓 現在の血圧 (mmHg)</label>
+          <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">
+            <div class="form-group">
+              <input type="number" class="form-input" id="user-bp-systolic" min="50" max="250" step="1" placeholder="最高 (例 120)">
+              <div style="font-size:10px;color:var(--text-muted);margin-top:3px;text-align:center">最高 / 収縮期</div>
+            </div>
+            <div class="form-group">
+              <input type="number" class="form-input" id="user-bp-diastolic" min="30" max="180" step="1" placeholder="最低 (例 80)">
+              <div style="font-size:10px;color:var(--text-muted);margin-top:3px;text-align:center">最低 / 拡張期</div>
+            </div>
           </div>
         </div>
 
         <div class="form-group" style="margin-bottom:16px">
           <label class="form-label" for="user-activity-level">🏃‍♂️ 日常の活動レベル</label>
-          <select class="form-select" id="user-activity-level">
+          <select class="form-select" id="user-activity-level" onchange="App.calculateGoalsFromWeight()">
             <option value="light">デスクワーク中心・あまり動かない (低い)</option>
             <option value="moderate" selected>立ち仕事・通勤で歩く (普通)</option>
             <option value="active">スポーツ習慣・立ち仕事が多い (高い)</option>
@@ -503,15 +534,71 @@
     </div>
 
     <div class="modal-body" style="overflow-y:auto; flex:1; padding-right:4px;">
-      <!-- Loading State -->
-      <div id="daily-summary-loading" style="display:none; text-align:center; padding:40px 0;">
-        <div class="spinner" style="width:40px;height:40px;border-width:3px;margin:0 auto 16px auto;"></div>
-        <div style="color:var(--text-muted);font-size:14px;">1日の食事データをAIが分析中...<br>（約10〜15秒かかります）</div>
+
+      <!-- Step 1: Confirm & Input Measurements Before Analysis -->
+      <div id="daily-summary-confirm" style="display:none;">
+        <div class="glass-card" style="padding:16px 18px; margin-bottom:14px; background:rgba(61,255,160,0.03); border:1px solid rgba(61,255,160,0.2);">
+          <div style="font-size:14px; font-weight:700; color:var(--text-primary); margin-bottom:6px; display:flex; align-items:center; gap:6px;">
+            <span>🩺</span> 測定データの入力・確認
+          </div>
+          <div style="font-size:12px; color:var(--text-muted); line-height:1.5; margin-bottom:14px;">
+            この日の体重と血圧を入力してください。AIが食事データと合わせて総合評価します。<br>
+            <span style="font-size:11px; color:var(--primary);">※ 変更した値は現在の設定値としても自動更新されます。</span>
+          </div>
+
+          <!-- User Profile Badges -->
+          <div style="display:flex; gap:8px; flex-wrap:wrap; margin-bottom:14px;">
+            <span class="badge" id="daily-confirm-profile-badge" style="font-size:11px; background:rgba(255,255,255,0.06); color:var(--text-light);">👤 プロフィール</span>
+            <span class="badge" id="daily-confirm-goal-badge" style="font-size:11px; background:rgba(255,255,255,0.06); color:var(--text-light);">🎯 目標</span>
+          </div>
+
+          <!-- Measurement Inputs -->
+          <div style="display:grid; grid-template-columns:1fr; gap:12px;">
+            <div class="form-group">
+              <label class="form-label" for="daily-input-weight">⚖️ 本日の体重 (kg)</label>
+              <input type="number" class="form-input" id="daily-input-weight" min="30" max="200" step="0.1" placeholder="65.0">
+            </div>
+
+            <div class="form-group">
+              <label class="form-label">💓 本日の血圧 (mmHg)</label>
+              <div style="display:grid; grid-template-columns:1fr 1fr; gap:10px;">
+                <div>
+                  <input type="number" class="form-input" id="daily-input-bp-sys" min="50" max="250" step="1" placeholder="最高 (例 120)">
+                  <div style="font-size:10px; color:var(--text-muted); margin-top:3px; text-align:center;">最高 / 収縮期</div>
+                </div>
+                <div>
+                  <input type="number" class="form-input" id="daily-input-bp-dia" min="30" max="180" step="1" placeholder="最低 (例 80)">
+                  <div style="font-size:10px; color:var(--text-muted); margin-top:3px; text-align:center;">最低 / 拡張期</div>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <button class="btn btn-primary" id="btn-start-daily-analysis" onclick="App.confirmAndAnalyzeDaily()" style="width:100%; margin-top:16px; padding:12px; font-weight:700; font-size:14px;">
+            🤖 体重・血圧を含めてAI総括を開始
+          </button>
+        </div>
       </div>
 
-      <!-- Result State -->
+      <!-- Step 2: Loading State -->
+      <div id="daily-summary-loading" style="display:none; text-align:center; padding:40px 0;">
+        <div class="spinner" style="width:40px;height:40px;border-width:3px;margin:0 auto 16px auto;"></div>
+        <div style="color:var(--text-primary);font-size:15px;font-weight:600;margin-bottom:6px;">1日の食事・健康データをAIが総括中...</div>
+        <div style="color:var(--text-muted);font-size:13px;">カロリー、PFC、体重、血圧を総合分析しています</div>
+      </div>
+
+      <!-- Step 3: Result State -->
       <div id="daily-summary-result" style="display:none;">
         
+        <!-- Summary Measurement Badges -->
+        <div class="glass-card" style="padding:10px 14px; margin-bottom:12px; display:flex; align-items:center; justify-content:space-between; flex-wrap:wrap; gap:8px;">
+          <div style="display:flex; gap:6px; align-items:center; flex-wrap:wrap;">
+            <span class="badge badge-success" id="daily-result-weight-badge" style="font-size:12px;">⚖️ 65.0kg</span>
+            <span class="badge badge-info" id="daily-result-bp-badge" style="font-size:12px;">💓 120/80 mmHg</span>
+          </div>
+          <button class="btn btn-ghost" style="padding:4px 10px; font-size:11px; border-radius:10px;" onclick="App.showDailySummaryConfirm()">✏️ 測定値を変更して再分析</button>
+        </div>
+
         <div class="glass-card" style="padding:16px 20px; text-align:center; margin-bottom:14px">
           <div style="font-size:13px; color:var(--text-muted); margin-bottom:4px;">1日の合計摂取カロリー</div>
           <div style="font-size:32px; font-weight:700; font-family:Outfit, sans-serif; color:var(--primary);">
@@ -558,8 +645,8 @@
         </div>
         
         <div style="text-align:center; margin-top:16px;">
-           <button class="btn btn-ghost" id="btn-reanalyze-daily" style="font-size:12px;">
-             🔄 AIに再分析させる
+           <button class="btn btn-ghost" id="btn-reanalyze-daily" onclick="App.showDailySummaryConfirm()" style="font-size:12px;">
+             🔄 測定値を変更して再分析
            </button>
         </div>
 
@@ -614,6 +701,6 @@
 <!-- ===== Toast Container ===== -->
 <div class="toast-container" id="toast-container"></div>
 
-<script src="app.js?v=1.0.17"></script>
+<script src="app.js?v=1.0.18"></script>
 </body>
 </html>

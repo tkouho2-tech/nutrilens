@@ -1163,6 +1163,12 @@ body::before {
   border: 1px solid rgba(255, 179, 71, 0.3);
 }
 
+.badge-info {
+  background: rgba(0, 229, 255, 0.15);
+  color: #00e5ff;
+  border: 1px solid rgba(0, 229, 255, 0.3);
+}
+
 /* ===== Responsive ===== */
 @media (max-width: 600px) {
   .app-header { padding: 18px 0 16px; }

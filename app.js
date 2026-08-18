@@ -2,7 +2,7 @@
 
 const App = {
   // Version
-  version: 'v1.0.17',
+  version: 'v1.0.18',
 
   // State
   state: {
@@ -15,12 +15,17 @@ const App = {
     currentResult: null,
     currentDetailId: null,
     latestSavedMealId: null,
+    currentSummaryDate: null,
     mealHistory: [],
     dailySummaries: {},
     userBody: {
+      birthDate: '',
+      gender: 'male',
       currentWeight: 65,
       targetWeight: 60,
-      activityLevel: 'moderate'
+      activityLevel: 'moderate',
+      bloodPressureSystolic: 120,
+      bloodPressureDiastolic: 80,
     },
     goals: { calories: 1800, protein: 95, fat: 45, carbs: 220 },
     isLoading: false,
@@ -527,12 +532,18 @@ const App = {
     const tarW = ub.targetWeight || 60;
     const goalCal = this.state.goals?.calories || 1800;
     const diff = (tarW - curW).toFixed(1);
-    let goalStr = `現在の体重: ${curW}kg, 目標体重: ${tarW}kg (体重維持目標, 1日目標: ${goalCal}kcal)`;
-    if (diff < 0) {
-      goalStr = `現在の体重: ${curW}kg, 目標体重: ${tarW}kg (減量 ${Math.abs(diff)}kg 目標, 1日目標: ${goalCal}kcal)`;
-    } else if (diff > 0) {
-      goalStr = `現在の体重: ${curW}kg, 目標体重: ${tarW}kg (増量 ${diff}kg 目標, 1日目標: ${goalCal}kcal)`;
-    }
+    const age = this.getAge(ub.birthDate);
+    const genderStr = ub.gender === 'female' ? '女性' : ub.gender === 'male' ? '男性' : '';
+    const bpStr = (ub.bloodPressureSystolic && ub.bloodPressureDiastolic)
+      ? `血圧:${ub.bloodPressureSystolic}/${ub.bloodPressureDiastolic}mmHg`
+      : '';
+    const extraInfo = [
+      age !== null ? `${age}歳` : '',
+      genderStr,
+      bpStr
+    ].filter(Boolean).join(', ');
+
+    let goalStr = `現在の体重: ${curW}kg, 目標体重: ${tarW}kg (${diff < 0 ? `減量 ${Math.abs(diff)}kg 目標` : diff > 0 ? `増量 ${diff}kg 目標` : '体重維持目標'}, 1日目標: ${goalCal}kcal)${extraInfo ? `, プロフィール:[${extraInfo}]` : ''}`;
 
     const prompt = `この料理の写真を詳しく分析して、以下のJSON形式で栄養情報を返してください。
 ユーザーの身体・目標情報: 【${goalStr}】
@@ -1252,22 +1263,44 @@ itemsには写真に写っている個々のおかず・食材をそれぞれ列
     this.showToast('食事記録をリセットしました', 'info');
   },
 
+  // ===== Age Helper =====
+  getAge(birthDateStr) {
+    if (!birthDateStr) return null;
+    const birth = new Date(birthDateStr);
+    if (isNaN(birth.getTime())) return null;
+    const today = new Date();
+    let age = today.getFullYear() - birth.getFullYear();
+    const m = today.getMonth() - birth.getMonth();
+    if (m < 0 || (m === 0 && today.getDate() < birth.getDate())) {
+      age--;
+    }
+    return age >= 0 ? age : null;
+  },
+
+  onBirthdateChange() {
+    const val = document.getElementById('user-birthdate')?.value;
+    const age = this.getAge(val);
+    const preview = document.getElementById('user-age-preview');
+    if (preview) {
+      preview.textContent = age !== null ? `(${age}歳)` : '';
+    }
+    this.calculateGoalsFromWeight();
+  },
+
   // ===== Daily Summary =====
   async openDailySummaryModal(dateStr) {
+    this.state.currentSummaryDate = dateStr;
     const modal = document.getElementById('daily-summary-modal');
     modal.classList.add('active');
     const dateObj = new Date(dateStr);
     const displayDate = dateObj.toLocaleDateString('ja-JP', { year: 'numeric', month: 'short', day: 'numeric', weekday: 'short' });
     document.getElementById('daily-summary-date').textContent = `${displayDate} の総括`;
-    
-    const reanalyzeBtn = document.getElementById('btn-reanalyze-daily');
-    reanalyzeBtn.onclick = () => this.analyzeDaily(dateStr, true);
 
     const summary = this.state.dailySummaries[dateStr];
     if (summary) {
       this.renderDailySummaryResult(summary);
     } else {
-      await this.analyzeDaily(dateStr, false);
+      this.showDailySummaryConfirm();
     }
   },
 
@@ -1275,9 +1308,79 @@ itemsには写真に写っている個々のおかず・食材をそれぞれ列
     document.getElementById('daily-summary-modal').classList.remove('active');
   },
 
+  showDailySummaryConfirm() {
+    document.getElementById('daily-summary-confirm').style.display = 'block';
+    document.getElementById('daily-summary-loading').style.display = 'none';
+    document.getElementById('daily-summary-result').style.display = 'none';
+
+    const ub = this.state.userBody || {};
+    const age = this.getAge(ub.birthDate);
+    const genderStr = ub.gender === 'female' ? '女性' : ub.gender === 'male' ? '男性' : 'その他';
+    const curW = ub.currentWeight || 65;
+    const tarW = ub.targetWeight || 60;
+    const bpSys = ub.bloodPressureSystolic || 120;
+    const bpDia = ub.bloodPressureDiastolic || 80;
+
+    const profileBadge = document.getElementById('daily-confirm-profile-badge');
+    if (profileBadge) {
+      const ageText = age !== null ? `${age}歳` : '年齢未設定';
+      profileBadge.textContent = `👤 ${ageText} / ${genderStr}`;
+    }
+
+    const goalBadge = document.getElementById('daily-confirm-goal-badge');
+    if (goalBadge) {
+      goalBadge.textContent = `🎯 目標 ${tarW}kg (${tarW < curW ? '減量' : tarW > curW ? '増量' : '維持'})`;
+    }
+
+    const weightInput = document.getElementById('daily-input-weight');
+    const bpSysInput = document.getElementById('daily-input-bp-sys');
+    const bpDiaInput = document.getElementById('daily-input-bp-dia');
+
+    if (weightInput) weightInput.value = curW;
+    if (bpSysInput) bpSysInput.value = bpSys;
+    if (bpDiaInput) bpDiaInput.value = bpDia;
+  },
+
+  async confirmAndAnalyzeDaily() {
+    const weightInput = document.getElementById('daily-input-weight');
+    const bpSysInput = document.getElementById('daily-input-bp-sys');
+    const bpDiaInput = document.getElementById('daily-input-bp-dia');
+
+    const weight = parseFloat(weightInput?.value) || this.state.userBody.currentWeight || 65;
+    const bpSys = parseInt(bpSysInput?.value) || this.state.userBody.bloodPressureSystolic || 120;
+    const bpDia = parseInt(bpDiaInput?.value) || this.state.userBody.bloodPressureDiastolic || 80;
+
+    // 現在の設定値として自動更新
+    this.state.userBody.currentWeight = weight;
+    this.state.userBody.bloodPressureSystolic = bpSys;
+    this.state.userBody.bloodPressureDiastolic = bpDia;
+    await this.saveToStorage();
+    this.renderGoals();
+    this.renderDashboard();
+
+    const dateStr = this.state.currentSummaryDate;
+    await this.analyzeDaily(dateStr, true, { weight, bpSys, bpDia });
+  },
+
   renderDailySummaryResult(summary) {
+    document.getElementById('daily-summary-confirm').style.display = 'none';
     document.getElementById('daily-summary-loading').style.display = 'none';
     document.getElementById('daily-summary-result').style.display = 'block';
+
+    const w = summary.weight || this.state.userBody.currentWeight || 65;
+    const bpSys = summary.bpSys || this.state.userBody.bloodPressureSystolic || 120;
+    const bpDia = summary.bpDia || this.state.userBody.bloodPressureDiastolic || 80;
+
+    const wBadge = document.getElementById('daily-result-weight-badge');
+    if (wBadge) wBadge.textContent = `⚖️ ${w}kg`;
+
+    const bpBadge = document.getElementById('daily-result-bp-badge');
+    if (bpBadge) {
+      let bpStatus = '';
+      if (bpSys >= 140 || bpDia >= 90) bpStatus = ' (高め)';
+      else if (bpSys < 120 && bpDia < 80) bpStatus = ' (正常)';
+      bpBadge.textContent = `💓 ${bpSys}/${bpDia} mmHg${bpStatus}`;
+    }
 
     document.getElementById('daily-total-calories').textContent = summary.totalCalories || 0;
     
@@ -1312,7 +1415,7 @@ itemsには写真に写っている個々のおかず・食材をそれぞれ列
     document.getElementById('daily-ai-comment').textContent = summary.aiComment || 'アドバイスがありません。';
   },
 
-  async analyzeDaily(dateStr, force = false) {
+  async analyzeDaily(dateStr, force = false, measurementData = null) {
     if (!this.state.apiKey) {
       this.showToast('Gemini APIキーを設定してください', 'error');
       this.closeDailySummaryModal();
@@ -1332,6 +1435,7 @@ itemsには写真に写っている個々のおかず・食材をそれぞれ列
       return;
     }
 
+    document.getElementById('daily-summary-confirm').style.display = 'none';
     document.getElementById('daily-summary-loading').style.display = 'block';
     document.getElementById('daily-summary-result').style.display = 'none';
 
@@ -1344,7 +1448,8 @@ itemsには写真に写っている個々のおかず・食材をそれぞれ列
       totalPFC.protein += (m.pfc?.protein || 0);
       totalPFC.fat += (m.pfc?.fat || 0);
       totalPFC.carbs += (m.pfc?.carbs || 0);
-      mealsSummaryText += `・${m.foodName} (${m.calories}kcal, P:${m.pfc?.protein}g, F:${m.pfc?.fat}g, C:${m.pfc?.carbs}g) - AI評価: ${m.aiComment}\n`;
+      const sodiumInfo = m.nutrients?.sodium ? `, ナトリウム:${m.nutrients.sodium}mg` : '';
+      mealsSummaryText += `・${m.foodName} (${m.calories}kcal, P:${m.pfc?.protein || 0}g, F:${m.pfc?.fat || 0}g, C:${m.pfc?.carbs || 0}g${sodiumInfo}) - AI評価: ${m.aiComment}\n`;
     });
 
     const goalCal = this.state.goals?.calories || 1800;
@@ -1352,16 +1457,24 @@ itemsには写真に写っている個々のおかず・食材をそれぞれ列
     const diffText = goalDiff > 0 ? `+${goalDiff}` : goalDiff;
 
     const ub = this.state.userBody || {};
-    const curW = ub.currentWeight || 65;
+    const curW = measurementData?.weight ?? ub.currentWeight ?? 65;
     const tarW = ub.targetWeight || 60;
+    const bpSys = measurementData?.bpSys ?? ub.bloodPressureSystolic ?? 120;
+    const bpDia = measurementData?.bpDia ?? ub.bloodPressureDiastolic ?? 80;
+    const age = this.getAge(ub.birthDate);
+    const genderStr = ub.gender === 'female' ? '女性' : ub.gender === 'male' ? '男性' : 'その他';
+
     let mode = '維持';
     if (tarW < curW) mode = '減量';
     if (tarW > curW) mode = '増量';
 
-    const prompt = `あなたはプロの栄養士AIです。以下のユーザーの「1日の食事記録」を総合的に分析し、アドバイスを生成してください。
+    const prompt = `あなたはプロの医師・管理栄養士AIです。以下のユーザーの身体情報（年齢・性別・体重・血圧）と「1日の食事記録」を総合的に分析し、医学的・栄養学的な総括アドバイスを生成してください。
 
-【ユーザー情報】
-目標: ${mode} (現在${curW}kg -> 目標${tarW}kg)
+【ユーザー身体・健康データ】
+年齢: ${age !== null ? `${age}歳` : '未設定'}
+性別: ${genderStr}
+現在の体重: ${curW}kg (目標: ${tarW}kg, ${mode}目標)
+現在の血圧: ${bpSys}/${bpDia} mmHg (収縮期${bpSys} / 拡張期${bpDia})
 1日の目標摂取カロリー: ${goalCal}kcal
 
 【本日の食事データ】
@@ -1370,9 +1483,15 @@ itemsには写真に写っている個々のおかず・食材をそれぞれ列
 食べたもの一覧と個別の評価:
 ${mealsSummaryText}
 
-【指示】
-これらのデータを元に、1日の総括となるAIアドバイス（日本語、4〜5文程度）を作成してください。カロリーやPFCのバランス、良かった点、翌日以降の改善点（不足している栄養素や食べすぎへの対策など）を具体的に含めてください。
-以下のJSON形式のみで出力してください。
+【総括指示】
+これらのデータを元に、1日の総括となるAIアドバイス（日本語、4〜5文程度）を作成してください。
+以下の内容を必ず含めてください：
+1. カロリーおよびPFCの摂取バランス評価
+2. ユーザーの年齢・性別・体重目標に対するフィードバック
+3. 血圧（最高${bpSys} / 最低${bpDia} mmHg）を踏まえた栄養アドバイス（塩分・ナトリウムの摂りすぎ注意、カリウムや食物繊維の摂取、水分や脂質のバランスなど）
+4. 良かった点と、明日以降の具体的な改善アクション
+
+必ず以下のJSON形式のみで出力してください。
 
 {
   "aiComment": "ここへ総括アドバイスを記述"
@@ -1388,7 +1507,10 @@ ${mealsSummaryText}
         totalCalories,
         pfc: totalPFC,
         goalDiff,
-        aiComment: parsed.aiComment || '本日の食事記録から分析を完了しました。'
+        weight: curW,
+        bpSys,
+        bpDia,
+        aiComment: parsed.aiComment || '本日の食事記録および体重・血圧データから総括分析を完了しました。'
       };
 
       this.state.dailySummaries[dateStr] = summary;
@@ -1396,7 +1518,7 @@ ${mealsSummaryText}
       this.renderDailySummaryResult(summary);
       
       if (force) {
-        this.showToast('再分析が完了しました', 'success');
+        this.showToast('1日の総括分析が完了しました', 'success');
       }
 
     } catch (err) {
@@ -1412,16 +1534,34 @@ ${mealsSummaryText}
     const curWEl = document.getElementById('user-current-weight');
     const tarWEl = document.getElementById('user-target-weight');
     const actEl = document.getElementById('user-activity-level');
+    const birthEl = document.getElementById('user-birthdate');
+    const genderEl = document.getElementById('user-gender');
+    const bpSysEl = document.getElementById('user-bp-systolic');
+    const bpDiaEl = document.getElementById('user-bp-diastolic');
     if (!curWEl || !tarWEl || !actEl) return null;
 
     const currentWeight = parseFloat(curWEl.value) || 65;
     const targetWeight = parseFloat(tarWEl.value) || 60;
     const activity = actEl.value || 'moderate';
+    const birthDate = birthEl?.value || '';
+    const gender = genderEl?.value || 'male';
+    const bloodPressureSystolic = parseInt(bpSysEl?.value) || 120;
+    const bloodPressureDiastolic = parseInt(bpDiaEl?.value) || 80;
 
-    this.state.userBody = { currentWeight, targetWeight, activityLevel: activity };
+    this.state.userBody = {
+      ...this.state.userBody,
+      birthDate,
+      gender,
+      currentWeight,
+      targetWeight,
+      activityLevel: activity,
+      bloodPressureSystolic,
+      bloodPressureDiastolic
+    };
 
-    // 1. 基礎代謝 (BMR) 簡易算出 (kg * 22)
-    const bmr = currentWeight * 22;
+    // 1. 基礎代謝 (BMR) 算出 (性別と体重)
+    const baseMult = gender === 'female' ? 21.5 : gender === 'male' ? 24 : 22.5;
+    const bmr = currentWeight * baseMult;
 
     // 2. 活動レベル乗数
     const actMultipliers = { light: 1.3, moderate: 1.5, active: 1.75 };
@@ -1483,14 +1623,30 @@ ${mealsSummaryText}
   },
 
   renderGoals() {
-    const ub = this.state.userBody || { currentWeight: 65, targetWeight: 60, activityLevel: 'moderate' };
+    const ub = this.state.userBody || {
+      birthDate: '', gender: 'male', currentWeight: 65, targetWeight: 60,
+      activityLevel: 'moderate', bloodPressureSystolic: 120, bloodPressureDiastolic: 80
+    };
+    const birthEl = document.getElementById('user-birthdate');
+    const genderEl = document.getElementById('user-gender');
     const curWEl = document.getElementById('user-current-weight');
     const tarWEl = document.getElementById('user-target-weight');
     const actEl = document.getElementById('user-activity-level');
+    const bpSysEl = document.getElementById('user-bp-systolic');
+    const bpDiaEl = document.getElementById('user-bp-diastolic');
 
-    if (curWEl) curWEl.value = ub.currentWeight;
-    if (tarWEl) tarWEl.value = ub.targetWeight;
-    if (actEl) actEl.value = ub.activityLevel;
+    if (birthEl) {
+      birthEl.value = ub.birthDate || '';
+      const age = this.getAge(ub.birthDate);
+      const preview = document.getElementById('user-age-preview');
+      if (preview) preview.textContent = age !== null ? `(${age}歳)` : '';
+    }
+    if (genderEl) genderEl.value = ub.gender || 'male';
+    if (curWEl) curWEl.value = ub.currentWeight ?? 65;
+    if (tarWEl) tarWEl.value = ub.targetWeight ?? 60;
+    if (actEl) actEl.value = ub.activityLevel || 'moderate';
+    if (bpSysEl) bpSysEl.value = ub.bloodPressureSystolic ?? 120;
+    if (bpDiaEl) bpDiaEl.value = ub.bloodPressureDiastolic ?? 80;
 
     if (this.state.goals) {
       const calInput = document.getElementById('goal-calories');
@@ -1514,14 +1670,27 @@ ${mealsSummaryText}
       carbs: parseInt(document.getElementById('goal-carbs').value) || calc.carbs || 220,
     };
 
-    const curW = parseFloat(document.getElementById('user-current-weight').value) || 65;
-    const tarW = parseFloat(document.getElementById('user-target-weight').value) || 60;
-    const act = document.getElementById('user-activity-level').value || 'moderate';
-    this.state.userBody = { currentWeight: curW, targetWeight: tarW, activityLevel: act };
+    const birthDate = document.getElementById('user-birthdate')?.value || '';
+    const gender = document.getElementById('user-gender')?.value || 'male';
+    const curW = parseFloat(document.getElementById('user-current-weight')?.value) || 65;
+    const tarW = parseFloat(document.getElementById('user-target-weight')?.value) || 60;
+    const act = document.getElementById('user-activity-level')?.value || 'moderate';
+    const bpSys = parseInt(document.getElementById('user-bp-systolic')?.value) || 120;
+    const bpDia = parseInt(document.getElementById('user-bp-diastolic')?.value) || 80;
+
+    this.state.userBody = {
+      birthDate,
+      gender,
+      currentWeight: curW,
+      targetWeight: tarW,
+      activityLevel: act,
+      bloodPressureSystolic: bpSys,
+      bloodPressureDiastolic: bpDia
+    };
 
     await this.saveToStorage();
     this.renderDashboard();
-    this.showToast('体重目標・栄養目標を保存しました！', 'success');
+    this.showToast('身体情報・目標設定を保存しました！', 'success');
   },
 
   // ===== API Modal =====
