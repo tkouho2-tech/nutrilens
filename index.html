@@ -8,7 +8,7 @@
   <meta http-equiv="Expires" content="0">
   <title>NutriLens — AI食事栄養分析アプリ</title>
   <meta name="description" content="食事の写真を撮るだけでAIがカロリーや栄養素を自動分析。毎日の健康管理をスマートにサポートします。">
-  <link rel="stylesheet" href="style.css?v=1.0.22">
+  <link rel="stylesheet" href="style.css?v=1.0.23">
 </head>
 <body>
 
@@ -22,7 +22,7 @@
       <div>
         <div style="display: flex; align-items: center; gap: 8px;">
           <div class="logo-text">NutriLens</div>
-          <span class="app-version-badge" id="app-version">v1.0.22</span>
+          <span class="app-version-badge" id="app-version">v1.0.23</span>
         </div>
         <div class="logo-subtitle">AI栄養分析</div>
       </div>
@@ -458,6 +458,13 @@
             </div>
           </div>
         </details>
+        <!-- Data Retention Info -->
+        <div style="margin-top:16px; padding:10px 12px; background:rgba(255,255,255,0.02); border:1px solid var(--glass-border); border-radius:var(--radius-sm); display:flex; align-items:center; justify-content:space-between; font-size:12px;">
+          <span style="color:var(--text-muted); display:flex; align-items:center; gap:6px;">
+            <span>📅</span> データ保持期間: 直近30日間
+          </span>
+          <span class="badge" style="font-size:10px; background:rgba(61,255,160,0.1); color:var(--primary);">自動ローテーション</span>
+        </div>
       </div>
     </div>
 
@@ -790,6 +797,6 @@
 <!-- ===== Toast Container ===== -->
 <div class="toast-container" id="toast-container"></div>
 
-<script src="app.js?v=1.0.22"></script>
+<script src="app.js?v=1.0.23"></script>
 </body>
 </html>

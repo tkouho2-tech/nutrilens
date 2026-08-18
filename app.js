@@ -2,7 +2,7 @@
 
 const App = {
   // Version
-  version: 'v1.0.22',
+  version: 'v1.0.23',
 
   // State
   state: {
@@ -96,14 +96,41 @@ const App = {
         this.state.apiKey = data.apiKey || '';
         this.state.selectedModel = data.selectedModel || 'auto';
 
-        // 食事記録が0件の日付の孤立した古いサマリーを自動クリーンアップ
-        if (this.cleanOrphanDailySummaries()) {
+        // 30日を超過した古い記録の自動クリーンアップ
+        const cleaned = this.cleanupExpiredMeals(30);
+        const orphanCleaned = this.cleanOrphanDailySummaries();
+        if (cleaned || orphanCleaned) {
           await this.saveToStorage();
         }
       }
     } catch (e) {
       console.error('Failed to load from storage:', e);
     }
+  },
+
+  // 30日以上前の古い食事データを自動ローテーション（1件ずつ自動削除）
+  cleanupExpiredMeals(retentionDays = 30) {
+    if (!this.state.mealHistory || this.state.mealHistory.length === 0) return false;
+
+    const now = new Date();
+    // 基準日の00:00:00から30日前まで保持
+    const cutoffDate = new Date(now.getFullYear(), now.getMonth(), now.getDate() - retentionDays);
+    const cutoffTime = cutoffDate.getTime();
+
+    const initialCount = this.state.mealHistory.length;
+    this.state.mealHistory = this.state.mealHistory.filter(m => {
+      const mTime = new Date(m.timestamp).getTime();
+      return !isNaN(mTime) && mTime >= cutoffTime;
+    });
+
+    const removedCount = initialCount - this.state.mealHistory.length;
+    this.cleanOrphanDailySummaries();
+
+    if (removedCount > 0) {
+      console.log(`Auto-cleaned ${removedCount} meals older than ${retentionDays} days.`);
+      return true;
+    }
+    return false;
   },
 
   cleanOrphanDailySummaries() {
@@ -859,6 +886,10 @@ itemsには写真に写っている個々のおかず・食材をそれぞれ列
     };
     this.state.latestSavedMealId = meal.id;
     this.state.mealHistory.unshift(meal);
+    
+    // 30日を超過した古い記録の自動ローテーション（古いデータを1件ずつ削除）
+    this.cleanupExpiredMeals(30);
+
     await this.saveToStorage();
     
     if (isAuto) {
