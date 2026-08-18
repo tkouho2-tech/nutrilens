@@ -2,7 +2,7 @@
 
 const App = {
   // Version
-  version: 'v1.0.18',
+  version: 'v1.0.19',
 
   // State
   state: {
