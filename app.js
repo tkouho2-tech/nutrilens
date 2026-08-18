@@ -2,7 +2,7 @@
 
 const App = {
   // Version
-  version: 'v1.0.19',
+  version: 'v1.0.20',
 
   // State
   state: {
@@ -16,6 +16,7 @@ const App = {
     currentDetailId: null,
     latestSavedMealId: null,
     currentSummaryDate: null,
+    selectedDashboardDate: null,
     mealHistory: [],
     dailySummaries: {},
     userBody: {
@@ -843,35 +844,265 @@ itemsには写真に写っている個々のおかず・食材をそれぞれ列
     }
   },
 
+  // ===== Dashboard Date Helpers =====
+  getTodayDateStr() {
+    const today = new Date();
+    const year = today.getFullYear();
+    const month = String(today.getMonth() + 1).padStart(2, '0');
+    const day = String(today.getDate()).padStart(2, '0');
+    return `${year}-${month}-${day}`;
+  },
+
+  getDashboardDateStr() {
+    return this.state.selectedDashboardDate || this.getTodayDateStr();
+  },
+
+  changeDashboardDate(offsetDays) {
+    const curStr = this.getDashboardDateStr();
+    const [y, m, d] = curStr.split('-').map(Number);
+    const dateObj = new Date(y, m - 1, d);
+    dateObj.setDate(dateObj.getDate() + offsetDays);
+    const year = dateObj.getFullYear();
+    const month = String(dateObj.getMonth() + 1).padStart(2, '0');
+    const day = String(dateObj.getDate()).padStart(2, '0');
+    this.state.selectedDashboardDate = `${year}-${month}-${day}`;
+    this.renderDashboard();
+  },
+
+  setDashboardDateToday() {
+    this.state.selectedDashboardDate = this.getTodayDateStr();
+    this.renderDashboard();
+  },
+
   // ===== Dashboard =====
   renderDashboard() {
-    const today = new Date().toDateString();
-    const todayMeals = this.state.mealHistory.filter(m =>
-      new Date(m.timestamp).toDateString() === today
-    );
+    const dateStr = this.getDashboardDateStr();
+    const todayStr = this.getTodayDateStr();
+    const isToday = dateStr === todayStr;
 
-    const totalCal = todayMeals.reduce((s, m) => s + (m.calories || 0), 0);
-    const totalProtein = todayMeals.reduce((s, m) => s + (m.pfc?.protein || 0), 0);
-    const totalFat = todayMeals.reduce((s, m) => s + (m.pfc?.fat || 0), 0);
-    const totalCarbs = todayMeals.reduce((s, m) => s + (m.pfc?.carbs || 0), 0);
+    // 1. Date Navigation Display
+    const [y, m, d] = dateStr.split('-').map(Number);
+    const dateObj = new Date(y, m - 1, d);
+    const displayDate = dateObj.toLocaleDateString('ja-JP', {
+      year: 'numeric',
+      month: 'long',
+      day: 'numeric',
+      weekday: 'short'
+    });
 
-    document.getElementById('dash-calories').textContent = totalCal;
-    document.getElementById('dash-meals').textContent = todayMeals.length;
-    document.getElementById('dash-protein').textContent = `${totalProtein}g`;
+    const dateDisplayEl = document.getElementById('dash-date-display');
+    if (dateDisplayEl) dateDisplayEl.textContent = displayDate;
 
-    const calProgress = Math.min((totalCal / this.state.goals.calories) * 100, 100);
-    document.getElementById('calorie-progress-fill').style.width = `${calProgress}%`;
-    document.getElementById('calorie-progress-label').textContent =
-      `目標 ${this.state.goals.calories} kcal の ${Math.round(calProgress)}%`;
+    const dateBadgeEl = document.getElementById('dash-date-badge');
+    const todayBtnEl = document.getElementById('btn-dash-today');
 
-    // Total record count
+    if (isToday) {
+      if (dateBadgeEl) {
+        dateBadgeEl.textContent = '今日';
+        dateBadgeEl.className = 'badge badge-success';
+      }
+      if (todayBtnEl) todayBtnEl.style.display = 'none';
+    } else {
+      const todayDate = new Date();
+      const diffTime = dateObj.getTime() - new Date(todayDate.getFullYear(), todayDate.getMonth(), todayDate.getDate()).getTime();
+      const diffDays = Math.round(diffTime / (1000 * 60 * 60 * 24));
+      let badgeText = '';
+      if (diffDays === -1) badgeText = '昨日';
+      else if (diffDays === 1) badgeText = '明日';
+      else if (diffDays < 0) badgeText = `${Math.abs(diffDays)}日前`;
+      else badgeText = `${diffDays}日後`;
+
+      if (dateBadgeEl) {
+        dateBadgeEl.textContent = badgeText;
+        dateBadgeEl.className = 'badge badge-info';
+      }
+      if (todayBtnEl) todayBtnEl.style.display = 'inline-flex';
+    }
+
+    // 2. Filter meals for selected date (sort by time ascending)
+    const dayMeals = this.state.mealHistory.filter(meal => {
+      const mDate = new Date(meal.timestamp);
+      const mStr = mDate.getFullYear() + '-' + String(mDate.getMonth() + 1).padStart(2, '0') + '-' + String(mDate.getDate()).padStart(2, '0');
+      return mStr === dateStr;
+    });
+    dayMeals.sort((a, b) => new Date(a.timestamp) - new Date(b.timestamp));
+
+    // 3. Quick Stats
+    const mealsCountEl = document.getElementById('dash-meals');
+    if (mealsCountEl) mealsCountEl.textContent = dayMeals.length;
+
+    const weightEl = document.getElementById('dash-weight');
+    if (weightEl) {
+      const w = this.state.userBody?.currentWeight;
+      weightEl.textContent = w ? `${w}` : '--';
+    }
+
     const totalEl = document.getElementById('dash-total');
     if (totalEl) totalEl.textContent = this.state.mealHistory.length;
 
-    // PFC totals
-    document.getElementById('dash-pfc').textContent = `P:${totalProtein}g F:${totalFat}g C:${totalCarbs}g`;
+    // 4. Calculate Totals
+    const totalCal = dayMeals.reduce((s, m) => s + (m.calories || 0), 0);
+    const totalProtein = dayMeals.reduce((s, m) => s + (m.pfc?.protein || 0), 0);
+    const totalFat = dayMeals.reduce((s, m) => s + (m.pfc?.fat || 0), 0);
+    const totalCarbs = dayMeals.reduce((s, m) => s + (m.pfc?.carbs || 0), 0);
 
-    // Weekly chart
+    const goalCal = this.state.goals?.calories || 1800;
+
+    // Calorie Display
+    const calEl = document.getElementById('dash-calories');
+    if (calEl) calEl.textContent = totalCal.toLocaleString();
+
+    const targetTextEl = document.getElementById('dash-cal-target-text');
+    if (targetTextEl) targetTextEl.textContent = `目標 ${goalCal.toLocaleString()} kcal`;
+
+    const calProgress = Math.min((totalCal / goalCal) * 100, 100);
+    const progressFillEl = document.getElementById('calorie-progress-fill');
+    if (progressFillEl) progressFillEl.style.width = `${calProgress}%`;
+
+    const progressLabelEl = document.getElementById('calorie-progress-label');
+    if (progressLabelEl) {
+      const pct = Math.round((totalCal / goalCal) * 100);
+      progressLabelEl.textContent = `目標 ${goalCal.toLocaleString()} kcal の ${pct}%`;
+    }
+
+    const diffBadgeEl = document.getElementById('dash-cal-diff-badge');
+    if (diffBadgeEl) {
+      const calDiff = totalCal - goalCal;
+      if (dayMeals.length === 0) {
+        diffBadgeEl.textContent = '未記録';
+        diffBadgeEl.className = 'badge';
+        diffBadgeEl.style.background = 'rgba(255,255,255,0.08)';
+        diffBadgeEl.style.color = 'var(--text-muted)';
+      } else if (calDiff > 200) {
+        diffBadgeEl.textContent = `+${calDiff.toLocaleString()} kcal 多め`;
+        diffBadgeEl.className = 'badge badge-warning';
+        diffBadgeEl.style.background = '';
+        diffBadgeEl.style.color = '';
+      } else if (calDiff < -200) {
+        diffBadgeEl.textContent = `${calDiff.toLocaleString()} kcal 少なめ`;
+        diffBadgeEl.className = 'badge badge-warning';
+        diffBadgeEl.style.background = '';
+        diffBadgeEl.style.color = '';
+      } else {
+        diffBadgeEl.textContent = '目標達成ペース！';
+        diffBadgeEl.className = 'badge badge-success';
+        diffBadgeEl.style.background = '';
+        diffBadgeEl.style.color = '';
+      }
+    }
+
+    // 5. Render per-meal calorie list
+    const mealCalListEl = document.getElementById('dash-meals-calorie-list');
+    if (mealCalListEl) {
+      if (dayMeals.length === 0) {
+        mealCalListEl.innerHTML = `
+          <div style="font-size:12px; color:var(--text-muted); text-align:center; padding:12px 0;">
+            🍽️ この日の食事記録はありません
+          </div>
+        `;
+      } else {
+        let calHtml = '<div style="display:flex; flex-direction:column; gap:8px;">';
+        dayMeals.forEach(meal => {
+          const mDate = new Date(meal.timestamp);
+          const timeStr = mDate.toLocaleTimeString('ja-JP', { hour: '2-digit', minute: '2-digit' });
+          const mCal = meal.calories || 0;
+          const pct = totalCal > 0 ? Math.round((mCal / totalCal) * 100) : 0;
+          
+          calHtml += `
+            <div class="glass-card" onclick="App.openMealDetail(${meal.id})" style="padding:10px 12px; cursor:pointer; background:rgba(255,255,255,0.03); border:1px solid var(--glass-border); border-radius:var(--radius-sm); transition:var(--transition-fast);">
+              <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:6px;">
+                <div style="display:flex; align-items:center; gap:8px; overflow:hidden; min-width:0;">
+                  <span class="badge" style="font-size:11px; padding:2px 6px; background:rgba(61,255,160,0.12); color:var(--primary); flex-shrink:0;">${timeStr}</span>
+                  <span style="font-weight:600; font-size:13px; color:var(--text-primary); white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">${meal.foodName}</span>
+                </div>
+                <div style="text-align:right; flex-shrink:0; margin-left:8px;">
+                  <span style="font-weight:700; font-size:14px; color:var(--primary); font-family:'Outfit',sans-serif;">${mCal}</span>
+                  <span style="font-size:11px; color:var(--text-muted);"> kcal</span>
+                  <span style="font-size:10px; color:var(--text-muted); margin-left:4px;">(${pct}%)</span>
+                </div>
+              </div>
+              <div style="height:4px; background:rgba(255,255,255,0.06); border-radius:2px; overflow:hidden;">
+                <div style="height:100%; width:${pct}%; background:var(--gradient-main); border-radius:2px;"></div>
+              </div>
+            </div>
+          `;
+        });
+        calHtml += '</div>';
+        mealCalListEl.innerHTML = calHtml;
+      }
+    }
+
+    // 6. PFC Totals & Bar
+    const pfcTotal = totalProtein * 4 + totalFat * 9 + totalCarbs * 4;
+    const pPct = pfcTotal > 0 ? (totalProtein * 4 / pfcTotal * 100) : 33;
+    const fPct = pfcTotal > 0 ? (totalFat * 9 / pfcTotal * 100) : 33;
+    const cPct = pfcTotal > 0 ? (totalCarbs * 4 / pfcTotal * 100) : 34;
+
+    const pEl = document.getElementById('dash-protein');
+    const fEl = document.getElementById('dash-fat');
+    const cEl = document.getElementById('dash-carbs');
+    if (pEl) pEl.textContent = `${Math.round(totalProtein * 10) / 10}g`;
+    if (fEl) fEl.textContent = `${Math.round(totalFat * 10) / 10}g`;
+    if (cEl) cEl.textContent = `${Math.round(totalCarbs * 10) / 10}g`;
+
+    setTimeout(() => {
+      const pBar = document.getElementById('dash-pfc-protein');
+      const fBar = document.getElementById('dash-pfc-fat');
+      const cBar = document.getElementById('dash-pfc-carbs');
+      if (pBar) pBar.style.width = `${pPct}%`;
+      if (fBar) fBar.style.width = `${fPct}%`;
+      if (cBar) cBar.style.width = `${cPct}%`;
+    }, 150);
+
+    // 7. Render per-meal PFC balance list
+    const mealPfcListEl = document.getElementById('dash-meals-pfc-list');
+    if (mealPfcListEl) {
+      if (dayMeals.length === 0) {
+        mealPfcListEl.innerHTML = `
+          <div style="font-size:12px; color:var(--text-muted); text-align:center; padding:12px 0;">
+            🍽️ この日の食事記録はありません
+          </div>
+        `;
+      } else {
+        let pfcHtml = '<div style="display:flex; flex-direction:column; gap:8px;">';
+        dayMeals.forEach(meal => {
+          const mDate = new Date(meal.timestamp);
+          const timeStr = mDate.toLocaleTimeString('ja-JP', { hour: '2-digit', minute: '2-digit' });
+          const { protein = 0, fat = 0, carbs = 0 } = meal.pfc || {};
+          const mPfcTotal = protein * 4 + fat * 9 + carbs * 4;
+          const mpPct = mPfcTotal > 0 ? Math.round(protein * 4 / mPfcTotal * 100) : 33;
+          const mfPct = mPfcTotal > 0 ? Math.round(fat * 9 / mPfcTotal * 100) : 33;
+          const mcPct = mPfcTotal > 0 ? Math.round(carbs * 4 / mPfcTotal * 100) : 34;
+
+          pfcHtml += `
+            <div class="glass-card" onclick="App.openMealDetail(${meal.id})" style="padding:10px 12px; cursor:pointer; background:rgba(255,255,255,0.03); border:1px solid var(--glass-border); border-radius:var(--radius-sm);">
+              <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:6px;">
+                <div style="display:flex; align-items:center; gap:8px; overflow:hidden; min-width:0;">
+                  <span class="badge" style="font-size:11px; padding:2px 6px; background:rgba(56,189,248,0.12); color:var(--pfc-protein); flex-shrink:0;">${timeStr}</span>
+                  <span style="font-weight:600; font-size:13px; color:var(--text-primary); white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">${meal.foodName}</span>
+                </div>
+              </div>
+              <!-- Mini PFC Bar -->
+              <div class="pfc-bar-container" style="height:5px; margin-bottom:6px;">
+                <div class="pfc-segment protein" style="width:${mpPct}%"></div>
+                <div class="pfc-segment fat"     style="width:${mfPct}%"></div>
+                <div class="pfc-segment carbs"   style="width:${mcPct}%"></div>
+              </div>
+              <!-- Mini PFC Values -->
+              <div style="display:flex; justify-content:space-between; font-size:11px;">
+                <span class="item-pfc-label protein-text">P: ${protein}g <span style="font-size:10px; color:var(--text-muted);">(${mpPct}%)</span></span>
+                <span class="item-pfc-label fat-text">F: ${fat}g <span style="font-size:10px; color:var(--text-muted);">(${mfPct}%)</span></span>
+                <span class="item-pfc-label carbs-text">C: ${carbs}g <span style="font-size:10px; color:var(--text-muted);">(${mcPct}%)</span></span>
+              </div>
+            </div>
+          `;
+        });
+        pfcHtml += '</div>';
+        mealPfcListEl.innerHTML = pfcHtml;
+      }
+    }
+
+    // 8. Weekly Chart (週間カロリー推移)
     this.renderWeeklyChart();
   },
 

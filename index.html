@@ -8,7 +8,7 @@
   <meta http-equiv="Expires" content="0">
   <title>NutriLens — AI食事栄養分析アプリ</title>
   <meta name="description" content="食事の写真を撮るだけでAIがカロリーや栄養素を自動分析。毎日の健康管理をスマートにサポートします。">
-  <link rel="stylesheet" href="style.css?v=1.0.19">
+  <link rel="stylesheet" href="style.css?v=1.0.20">
 </head>
 <body>
 
@@ -22,7 +22,7 @@
       <div>
         <div style="display: flex; align-items: center; gap: 8px;">
           <div class="logo-text">NutriLens</div>
-          <span class="app-version-badge" id="app-version">v1.0.19</span>
+          <span class="app-version-badge" id="app-version">v1.0.20</span>
         </div>
         <div class="logo-subtitle">AI栄養分析</div>
       </div>
@@ -196,43 +196,122 @@
   <section id="tab-dashboard" class="tab-panel">
 
     <div id="dashboard-section">
-      <div class="section-title"><span class="icon">📊</span>今日のサマリー</div>
-
-      <div class="dashboard-grid">
-        <div class="glass-card stat-card">
-          <div class="stat-label">🔥 摂取カロリー</div>
-          <div class="stat-value" id="dash-calories">0</div>
-          <div class="stat-sub">kcal</div>
-          <div class="daily-progress-bar">
-            <div class="daily-progress-fill" id="calorie-progress-fill" style="width:0%"></div>
+      
+      <!-- Date Navigation (日毎の切り替え・前日・翌日) -->
+      <div class="glass-card" style="display:flex; align-items:center; justify-content:space-between; padding:10px 14px; margin-bottom:16px;">
+        <button class="btn btn-ghost" id="btn-dash-prev" onclick="App.changeDashboardDate(-1)" style="padding:6px 12px; font-size:12px;">◀ 前日</button>
+        <div style="text-align:center; flex:1; cursor:pointer;" onclick="App.setDashboardDateToday()" title="クリックで今日に移動">
+          <div id="dash-date-display" style="font-weight:700; font-size:15px; color:var(--text-primary);">2026年8月18日(火)</div>
+          <div id="dash-date-badge-wrap" style="margin-top:2px;">
+            <span id="dash-date-badge" class="badge badge-success" style="font-size:10px; padding:2px 8px;">今日</span>
           </div>
-          <div class="stat-sub" style="margin-top:6px" id="calorie-progress-label"></div>
         </div>
-        <div class="glass-card stat-card">
-          <div class="stat-label">🍽️ 食事回数</div>
-          <div class="stat-value" id="dash-meals">0</div>
+        <div style="display:flex; gap:4px; align-items:center;">
+          <button class="btn btn-ghost" id="btn-dash-today" onclick="App.setDashboardDateToday()" style="padding:6px 8px; font-size:11px; display:none;">今日へ</button>
+          <button class="btn btn-ghost" id="btn-dash-next" onclick="App.changeDashboardDate(1)" style="padding:6px 12px; font-size:12px;">翌日 ▶</button>
+        </div>
+      </div>
+
+      <!-- Quick Summary Stats Grid (食事回数, 体重, 全記録数) -->
+      <div class="dashboard-grid" style="grid-template-columns: repeat(3, 1fr); margin-bottom:14px; gap:10px;">
+        <div class="glass-card stat-card" style="padding:14px 10px; text-align:center;">
+          <div class="stat-label" style="font-size:11px;">🍽️ 食事回数</div>
+          <div class="stat-value" id="dash-meals" style="font-size:22px; font-weight:800;">0</div>
           <div class="stat-sub">食</div>
-          <div style="margin-top:8px;font-size:12px;color:var(--text-muted)" id="dash-pfc"></div>
         </div>
-        <div class="glass-card stat-card">
-          <div class="stat-label">💪 タンパク質</div>
-          <div class="stat-value" id="dash-protein">0g</div>
-          <div class="stat-sub">摂取量</div>
+        <div class="glass-card stat-card" style="padding:14px 10px; text-align:center;">
+          <div class="stat-label" style="font-size:11px;">⚖️ 体重</div>
+          <div class="stat-value" id="dash-weight" style="font-size:22px; font-weight:800;">--</div>
+          <div class="stat-sub">kg</div>
         </div>
-        <div class="glass-card stat-card">
-          <div class="stat-label">📅 記録数</div>
-          <div class="stat-value" id="dash-total" style="font-size:28px">—</div>
+        <div class="glass-card stat-card" style="padding:14px 10px; text-align:center;">
+          <div class="stat-label" style="font-size:11px;">📅 全記録数</div>
+          <div class="stat-value" id="dash-total" style="font-size:22px; font-weight:800;">0</div>
           <div class="stat-sub">合計食事数</div>
         </div>
       </div>
 
-      <!-- Weekly Chart -->
+      <!-- 1. Calorie Section: 1日合計カロリー + 食事時間ごとのカロリー内訳 -->
+      <div class="glass-card" style="padding:18px 20px; margin-bottom:14px;">
+        <div style="display:flex; justify-content:space-between; align-items:flex-start; margin-bottom:10px;">
+          <div>
+            <div style="font-size:12px; color:var(--text-muted); font-weight:600; text-transform:uppercase; letter-spacing:1px;">🔥 1日の総摂取カロリー</div>
+            <div style="font-size:32px; font-weight:800; font-family:'Outfit', sans-serif; color:var(--primary); line-height:1.1; margin-top:2px;">
+              <span id="dash-calories">0</span><span style="font-size:14px; color:var(--text-muted); font-weight:normal; margin-left:4px;">kcal</span>
+            </div>
+          </div>
+          <div style="text-align:right;">
+            <div style="font-size:11px; color:var(--text-muted);" id="dash-cal-target-text">目標 1800 kcal</div>
+            <div id="dash-cal-diff-badge" class="badge badge-success" style="margin-top:4px; font-size:10px;">目標達成ペース</div>
+          </div>
+        </div>
+        
+        <!-- Progress Bar -->
+        <div class="daily-progress-bar" style="margin-bottom:6px;">
+          <div class="daily-progress-fill" id="calorie-progress-fill" style="width:0%"></div>
+        </div>
+        <div class="stat-sub" style="font-size:11px; margin-bottom:16px;" id="calorie-progress-label">目標 1800 kcal の 0%</div>
+
+        <!-- 食事時間毎のカロリー内訳 -->
+        <div style="border-top:1px solid var(--glass-border); padding-top:12px;">
+          <div style="font-size:12px; font-weight:700; color:var(--text-secondary); margin-bottom:10px; display:flex; align-items:center; gap:6px;">
+            <span>⏱️</span> 食事時間ごとのカロリー表示
+          </div>
+          <div id="dash-meals-calorie-list">
+            <!-- 動的生成 -->
+          </div>
+        </div>
+      </div>
+
+      <!-- 2. PFC Balance Section: 1日合計バランス + 食事時間毎のバランス内訳 -->
+      <div class="glass-card" style="padding:18px 20px; margin-bottom:14px;">
+        <div class="pfc-title" style="margin-bottom:12px;">🥗 1日のPFCバランス</div>
+        
+        <!-- Total PFC Bar -->
+        <div class="pfc-bar-container" style="margin-bottom:10px;">
+          <div id="dash-pfc-protein" class="pfc-segment protein" style="width:0%"></div>
+          <div id="dash-pfc-fat"     class="pfc-segment fat"     style="width:0%"></div>
+          <div id="dash-pfc-carbs"   class="pfc-segment carbs"   style="width:0%"></div>
+        </div>
+
+        <!-- Total PFC Legend -->
+        <div class="pfc-legend" style="margin-bottom:16px;">
+          <div class="pfc-legend-item">
+            <div class="pfc-dot protein"></div>
+            <span class="pfc-label">P(タンパク質)</span>
+            <span class="pfc-amount" id="dash-protein">0g</span>
+          </div>
+          <div class="pfc-legend-item">
+            <div class="pfc-dot fat"></div>
+            <span class="pfc-label">F(脂質)</span>
+            <span class="pfc-amount" id="dash-fat">0g</span>
+          </div>
+          <div class="pfc-legend-item">
+            <div class="pfc-dot carbs"></div>
+            <span class="pfc-label">C(炭水化物)</span>
+            <span class="pfc-amount" id="dash-carbs">0g</span>
+          </div>
+        </div>
+
+        <!-- 食事時間毎のPFCバランス内訳 -->
+        <div style="border-top:1px solid var(--glass-border); padding-top:12px;">
+          <div style="font-size:12px; font-weight:700; color:var(--text-secondary); margin-bottom:10px; display:flex; align-items:center; gap:6px;">
+            <span>⏱️</span> 食事時間ごとのPFCバランス表示
+          </div>
+          <div id="dash-meals-pfc-list">
+            <!-- 動的生成 -->
+          </div>
+        </div>
+      </div>
+
+      <!-- 3. Weekly Chart (週間カロリー推移) -->
       <div class="glass-card weekly-chart-card">
         <div class="section-title" style="margin-bottom:0"><span class="icon">📈</span>週間カロリー推移</div>
         <div class="chart-container">
           <canvas id="weekly-chart"></canvas>
         </div>
       </div>
+
     </div>
 
   </section>
@@ -701,6 +780,6 @@
 <!-- ===== Toast Container ===== -->
 <div class="toast-container" id="toast-container"></div>
 
-<script src="app.js?v=1.0.19"></script>
+<script src="app.js?v=1.0.20"></script>
 </body>
 </html>
