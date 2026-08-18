@@ -2,7 +2,7 @@
 
 const App = {
   // Version
-  version: 'v1.0.13',
+  version: 'v1.0.14',
 
   // State
   state: {
@@ -1269,25 +1269,67 @@ ${mealsSummaryText}
 }`;
 
     try {
-      let model = this.state.selectedModel;
-      if (!model || model === 'auto') model = 'gemini-1.5-flash';
+      const fallbackCandidates = [
+        'gemini-2.0-flash',
+        'gemini-1.5-flash',
+        'gemini-2.0-flash-lite',
+        'gemini-1.5-pro'
+      ];
       
-      const response = await fetch(
-        `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${this.state.apiKey}`,
-        {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            contents: [{ parts: [{ text: prompt }] }],
-            generationConfig: { responseMimeType: 'application/json', temperature: 0.2 }
-          })
-        }
-      );
+      let modelsToTry = [];
+      if (this.state.selectedModel && this.state.selectedModel !== 'auto') {
+        modelsToTry.push(this.state.selectedModel);
+        fallbackCandidates.forEach(m => {
+          if (!modelsToTry.includes(m)) modelsToTry.push(m);
+        });
+      } else {
+        modelsToTry = [...fallbackCandidates];
+      }
 
-      if (!response.ok) throw new Error('API request failed');
+      let response = null;
+      let lastErrorText = 'API request failed';
+
+      for (const modelName of modelsToTry) {
+        try {
+          const res = await fetch(
+            `https://generativelanguage.googleapis.com/v1beta/models/${modelName}:generateContent?key=${this.state.apiKey}`,
+            {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                contents: [{ parts: [{ text: prompt }] }],
+                generationConfig: { responseMimeType: 'application/json', temperature: 0.2 }
+              })
+            }
+          );
+          
+          if (!res.ok) {
+            lastErrorText = await res.text();
+            console.warn(`Model ${modelName} failed:`, lastErrorText);
+            continue;
+          }
+          response = res;
+          break;
+        } catch (e) {
+          console.warn(`Model ${modelName} exception:`, e);
+          lastErrorText = e.message;
+        }
+      }
+
+      if (!response) {
+        let msg = 'すべてのモデルでAPIリクエストが失敗しました';
+        try {
+          const errJson = JSON.parse(lastErrorText);
+          msg = errJson?.error?.message || msg;
+        } catch(e){
+          msg = lastErrorText || msg;
+        }
+        throw new Error(msg);
+      }
+
       const data = await response.json();
       const text = data.candidates?.[0]?.content?.parts?.[0]?.text;
-      if (!text) throw new Error('No text returned');
+      if (!text) throw new Error('No text returned from API');
 
       let cleanText = text.trim();
       cleanText = cleanText.replace(/^```json\s*/i, '').replace(/^```\s*/, '').replace(/\s*```$/, '');
