@@ -2,7 +2,7 @@
 
 const App = {
   // Version
-  version: 'v1.0.24',
+  version: 'v1.0.25',
 
   // State
   state: {
@@ -27,6 +27,7 @@ const App = {
       activityLevel: 'moderate',
       bloodPressureSystolic: 120,
       bloodPressureDiastolic: 80,
+      routineNotes: '',
     },
     goals: { calories: 1800, protein: 95, fat: 45, carbs: 220 },
     isLoading: false,
@@ -603,10 +604,13 @@ const App = {
     ].filter(Boolean).join(', ');
 
     let goalStr = `現在の体重: ${curW}kg, 目標体重: ${tarW}kg (${diff < 0 ? `減量 ${Math.abs(diff)}kg 目標` : diff > 0 ? `増量 ${diff}kg 目標` : '体重維持目標'}, 1日目標: ${goalCal}kcal)${extraInfo ? `, プロフィール:[${extraInfo}]` : ''}`;
+    if (ub.routineNotes) {
+      goalStr += `, 生活習慣・ルーティン・特記事項: [${ub.routineNotes}]`;
+    }
 
     const prompt = `この料理の写真を詳しく分析して、以下のJSON形式で栄養情報を返してください。
-ユーザーの身体・目標情報: 【${goalStr}】
-aiCommentには、このユーザーの目標（${diff < 0 ? '減量' : diff > 0 ? '増量' : '維持'}）を考慮したアドバイスに加えて、分析した特徴的な栄養素が体にどのような効果（メリット）や悪影響（デメリット）をもたらすかを具体的に含め、日本語3〜4文程度で記述してください。
+ユーザーの身体・目標・生活ルーティン情報: 【${goalStr}】
+aiCommentには、このユーザーの目標（${diff < 0 ? '減量' : diff > 0 ? '増量' : '維持'}）および生活ルーティン・特記事項（設定されている場合）を考慮した個別アドバイスに加えて、分析した特徴的な栄養素が体にどのような効果（メリット）や悪影響（デメリット）をもたらすかを具体的に含め、日本語3〜4文程度で記述してください。
 推定値で構いません。必ずJSON形式のみで返し、説明文は不要です。
 itemsには写真に写っている個々のおかず・食材をそれぞれ列挙してください。
 
@@ -1866,6 +1870,7 @@ itemsには写真に写っている個々のおかず・食材をそれぞれ列
 現在の体重: ${curW}kg (目標: ${tarW}kg, ${mode}目標)
 現在の血圧: ${bpSys}/${bpDia} mmHg (収縮期${bpSys} / 拡張期${bpDia})
 1日の目標摂取カロリー: ${goalCal}kcal
+生活習慣・ルーティン・特記事項: ${ub.routineNotes || 'なし'}
 
 【本日の食事データ】
 総摂取カロリー: ${totalCalories}kcal (目標との差: ${diffText}kcal)
@@ -1879,7 +1884,8 @@ ${mealsSummaryText}
 1. カロリーおよびPFCの摂取バランス評価
 2. ユーザーの年齢・性別・体重目標に対するフィードバック
 3. 血圧（最高${bpSys} / 最低${bpDia} mmHg）を踏まえた栄養アドバイス（塩分・ナトリウムの摂りすぎ注意、カリウムや食物繊維の摂取、水分や脂質のバランスなど）
-4. 良かった点と、明日以降の具体的な改善アクション
+4. ユーザーの生活ルーティンや特記事項（設定されている場合）に配慮した、実践的かつ継続しやすいアドバイス
+5. 良かった点と、明日以降の具体的な改善アクション
 
 必ず以下のJSON形式のみで出力してください。
 
@@ -2016,7 +2022,8 @@ ${mealsSummaryText}
   renderGoals() {
     const ub = this.state.userBody || {
       birthDate: '', gender: 'male', currentWeight: 65, targetWeight: 60,
-      activityLevel: 'moderate', bloodPressureSystolic: 120, bloodPressureDiastolic: 80
+      activityLevel: 'moderate', bloodPressureSystolic: 120, bloodPressureDiastolic: 80,
+      routineNotes: ''
     };
     const birthEl = document.getElementById('user-birthdate');
     const genderEl = document.getElementById('user-gender');
@@ -2025,6 +2032,7 @@ ${mealsSummaryText}
     const actEl = document.getElementById('user-activity-level');
     const bpSysEl = document.getElementById('user-bp-systolic');
     const bpDiaEl = document.getElementById('user-bp-diastolic');
+    const routineEl = document.getElementById('user-routine-notes');
 
     if (birthEl) {
       birthEl.value = ub.birthDate || '';
@@ -2038,6 +2046,7 @@ ${mealsSummaryText}
     if (actEl) actEl.value = ub.activityLevel || 'moderate';
     if (bpSysEl) bpSysEl.value = ub.bloodPressureSystolic ?? 120;
     if (bpDiaEl) bpDiaEl.value = ub.bloodPressureDiastolic ?? 80;
+    if (routineEl) routineEl.value = ub.routineNotes || '';
 
     if (this.state.goals) {
       const calInput = document.getElementById('goal-calories');
@@ -2050,6 +2059,23 @@ ${mealsSummaryText}
       if (cInput) cInput.value = this.state.goals.carbs;
     }
     this.calculateGoalsFromWeight();
+  },
+
+  addRoutineTag(tagText) {
+    const el = document.getElementById('user-routine-notes');
+    if (!el) return;
+    const curVal = el.value.trim();
+    if (curVal.includes(tagText)) {
+      this.showToast(`「${tagText}」は既に入力欄に含まれています`, 'info');
+      el.focus();
+      return;
+    }
+    if (curVal.length > 0) {
+      el.value = `${curVal} / ${tagText}`;
+    } else {
+      el.value = tagText;
+    }
+    el.focus();
   },
 
   async saveGoals() {
@@ -2068,6 +2094,7 @@ ${mealsSummaryText}
     const act = document.getElementById('user-activity-level')?.value || 'moderate';
     const bpSys = parseInt(document.getElementById('user-bp-systolic')?.value) || 120;
     const bpDia = parseInt(document.getElementById('user-bp-diastolic')?.value) || 80;
+    const routineNotes = document.getElementById('user-routine-notes')?.value?.trim() || '';
 
     this.state.userBody = {
       birthDate,
@@ -2076,12 +2103,13 @@ ${mealsSummaryText}
       targetWeight: tarW,
       activityLevel: act,
       bloodPressureSystolic: bpSys,
-      bloodPressureDiastolic: bpDia
+      bloodPressureDiastolic: bpDia,
+      routineNotes
     };
 
     await this.saveToStorage();
     this.renderDashboard();
-    this.showToast('身体情報・目標設定を保存しました！', 'success');
+    this.showToast('身体情報・目標・生活ルーティンを保存しました！', 'success');
   },
 
   // ===== API Modal =====

@@ -22,7 +22,7 @@
       <div>
         <div style="display: flex; align-items: center; gap: 8px;">
           <div class="logo-text">NutriLens</div>
-          <span class="app-version-badge" id="app-version">v1.0.24</span>
+          <span class="app-version-badge" id="app-version">v1.0.25</span>
         </div>
         <div class="logo-subtitle">AI栄養分析</div>
       </div>
@@ -402,6 +402,28 @@
             <option value="moderate" selected>立ち仕事・通勤で歩く (普通)</option>
             <option value="active">スポーツ習慣・立ち仕事が多い (高い)</option>
           </select>
+        </div>
+
+        <!-- Routine & Special Notes for AI Analysis -->
+        <div class="form-group" style="margin-bottom:16px">
+          <div style="display:flex;align-items:center;justify-content:space-between">
+            <label class="form-label" for="user-routine-notes" style="margin-bottom:0">📝 生活ルーティン・健康メモ <span style="font-size:10px;color:var(--primary);text-transform:none;letter-spacing:0">(AI分析に反映)</span></label>
+            <span style="font-size:11px;color:var(--text-muted)">自由記述</span>
+          </div>
+          <textarea class="form-textarea" id="user-routine-notes" rows="3" placeholder="例: 朝食はプロテインのみ / 夕食は糖質オフ / 週3回筋トレ / 減塩を意識している / 乳製品・小麦アレルギーあり / カフェインを控えたい など"></textarea>
+          <div style="font-size:11px;color:var(--text-muted);margin-top:2px">
+            💡 入力された習慣や好みに合わせて、AIが毎回の食事や1日の総括でより実践的なアドバイスを提供します。
+          </div>
+          <!-- Quick Routine Tags -->
+          <div class="routine-tags-container">
+            <span class="routine-tag" onclick="App.addRoutineTag('朝はプロテインのみ')">🥛 朝プロテイン</span>
+            <span class="routine-tag" onclick="App.addRoutineTag('夜は糖質控えめ')">🍚 夜糖質オフ</span>
+            <span class="routine-tag" onclick="App.addRoutineTag('減塩・塩分控えめを意識')">🧂 減塩意識</span>
+            <span class="routine-tag" onclick="App.addRoutineTag('週3回筋トレ')">🏋️ 週3回筋トレ</span>
+            <span class="routine-tag" onclick="App.addRoutineTag('週2回有酸素運動')">🏃 有酸素運動習慣</span>
+            <span class="routine-tag" onclick="App.addRoutineTag('脂質を抑えたい')">🥗 脂質控えめ</span>
+            <span class="routine-tag" onclick="App.addRoutineTag('間食が多いのを改善したい')">🍪 間食改善</span>
+          </div>
         </div>
 
         <!-- Calculated Target Summary Badge -->
