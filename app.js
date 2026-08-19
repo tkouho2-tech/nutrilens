@@ -2,7 +2,7 @@
 
 const App = {
   // Version
-  version: 'v1.0.25',
+  version: 'v1.0.26',
 
   // State
   state: {
@@ -19,6 +19,7 @@ const App = {
     selectedDashboardDate: null,
     mealHistory: [],
     dailySummaries: {},
+    chatHistory: [],
     userBody: {
       birthDate: '',
       gender: 'male',
@@ -41,6 +42,7 @@ const App = {
     this.renderHistory();
     this.renderDashboard();
     this.renderGoals();
+    this.renderChatHistory();
     this.checkApiKey();
   },
 
@@ -92,6 +94,7 @@ const App = {
       if (data) {
         this.state.mealHistory = data.mealHistory || [];
         this.state.dailySummaries = data.dailySummaries || {};
+        this.state.chatHistory = data.chatHistory || [];
         this.state.goals = data.goals || this.state.goals;
         this.state.userBody = data.userBody || this.state.userBody;
         this.state.apiKey = data.apiKey || '';
@@ -164,6 +167,7 @@ const App = {
     const data = {
       mealHistory: this.state.mealHistory,
       dailySummaries: this.state.dailySummaries,
+      chatHistory: this.state.chatHistory,
       goals: this.state.goals,
       userBody: this.state.userBody,
       apiKey: this.state.apiKey,
@@ -270,6 +274,33 @@ const App = {
 
     // Clear history
     document.getElementById('btn-clear-history').addEventListener('click', () => this.clearHistory());
+
+    // AI Chat events
+    const chatInput = document.getElementById('chat-input');
+    const sendChatBtn = document.getElementById('btn-send-chat');
+    const clearChatBtn = document.getElementById('btn-clear-chat');
+
+    if (sendChatBtn) {
+      sendChatBtn.addEventListener('click', () => this.sendChatMessageFromInput());
+    }
+
+    if (clearChatBtn) {
+      clearChatBtn.addEventListener('click', () => this.clearChatHistory());
+    }
+
+    if (chatInput) {
+      chatInput.addEventListener('keydown', (e) => {
+        if (e.key === 'Enter' && !e.shiftKey) {
+          e.preventDefault();
+          this.sendChatMessageFromInput();
+        }
+      });
+      // 自動高さ調整
+      chatInput.addEventListener('input', () => {
+        chatInput.style.height = 'auto';
+        chatInput.style.height = Math.min(chatInput.scrollHeight, 100) + 'px';
+      });
+    }
   },
 
   // ===== Tab Navigation =====
@@ -283,6 +314,11 @@ const App = {
     });
     if (tab === 'dashboard') this.renderDashboard();
     if (tab === 'history') this.renderHistory();
+    if (tab === 'chat') {
+      this.renderChatHistory(true);
+      const chatInput = document.getElementById('chat-input');
+      if (chatInput) setTimeout(() => chatInput.focus(), 150);
+    }
   },
 
   // ===== Image Handling =====
@@ -458,7 +494,7 @@ const App = {
     }
   },
 
-  async executeGeminiGenerate({ prompt, base64Image = null, mimeType = 'image/jpeg', temperature = 0.1 }) {
+  async executeGeminiGenerate({ prompt, base64Image = null, mimeType = 'image/jpeg', temperature = 0.1, isJson = true }) {
     // 優先推奨モデル順（Gemini 2.5 -> 2.0 -> 1.5）
     const preferredOrder = [
       'gemini-2.5-flash',
@@ -514,6 +550,13 @@ const App = {
       });
     }
 
+    const generationConfig = {
+      temperature: temperature
+    };
+    if (isJson) {
+      generationConfig.responseMimeType = 'application/json';
+    }
+
     for (const modelName of modelsToTry) {
       attemptedModels.push(modelName);
       try {
@@ -524,10 +567,7 @@ const App = {
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
               contents: [{ parts }],
-              generationConfig: {
-                responseMimeType: 'application/json',
-                temperature: temperature
-              }
+              generationConfig: generationConfig
             })
           }
         );
@@ -560,6 +600,10 @@ const App = {
           console.warn(`モデル [${modelName}] からテキスト取得失敗。フォールバックを試みます...`);
           lastError = new Error(`モデル [${modelName}]: テキスト取得失敗`);
           continue;
+        }
+
+        if (!isJson) {
+          return text.trim();
         }
 
         // マークダウン装飾（```json ... ```）の除去とJSON抽出
@@ -2164,6 +2208,293 @@ ${mealsSummaryText}
       input.type = 'password';
       btn.textContent = '👁️';
     }
+  },
+
+  // ===== AI Nutrition Chat =====
+  renderChatHistory(scrollToBottom = false) {
+    const container = document.getElementById('chat-messages');
+    if (!container) return;
+
+    container.innerHTML = '';
+
+    // ウェルカムメッセージ
+    const welcomeEl = document.createElement('div');
+    welcomeEl.className = 'chat-msg ai';
+    welcomeEl.innerHTML = `
+      <div class="chat-avatar">👩‍⚕️</div>
+      <div class="chat-bubble">
+        <p>こんにちは！あなたの専属管理栄養士AIです🌿</p>
+        <p>本日の食事記録や目標（カロリー・PFC・血圧）、生活ルーティンを踏まえて、最適な食事アドバイスや疑問にお答えします。何でもお気軽にご相談ください！</p>
+      </div>
+    `;
+    container.appendChild(welcomeEl);
+
+    // 履歴メッセージ
+    const history = this.state.chatHistory || [];
+    history.forEach(msg => {
+      const msgEl = document.createElement('div');
+      msgEl.className = `chat-msg ${msg.role === 'user' ? 'user' : 'ai'}`;
+      const timeStr = msg.timestamp ? new Date(msg.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : '';
+
+      if (msg.role === 'user') {
+        msgEl.innerHTML = `
+          <div class="chat-bubble">
+            <div>${this.escapeHtml(msg.content).replace(/\n/g, '<br>')}</div>
+            ${timeStr ? `<div class="chat-msg-time">${timeStr}</div>` : ''}
+          </div>
+        `;
+      } else {
+        msgEl.innerHTML = `
+          <div class="chat-avatar">👩‍⚕️</div>
+          <div class="chat-bubble">
+            <div>${this.formatChatMarkdown(msg.content)}</div>
+            ${timeStr ? `<div class="chat-msg-time">${timeStr}</div>` : ''}
+          </div>
+        `;
+      }
+      container.appendChild(msgEl);
+    });
+
+    if (scrollToBottom) {
+      setTimeout(() => {
+        container.scrollTop = container.scrollHeight;
+      }, 50);
+    }
+  },
+
+  escapeHtml(str) {
+    return (str || '')
+      .replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;')
+      .replace(/'/g, '&#039;');
+  },
+
+  formatChatMarkdown(text) {
+    if (!text) return '';
+    let formatted = this.escapeHtml(text);
+
+    // 太字 **text**
+    formatted = formatted.replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>');
+
+    // 箇条書き・リスト
+    const lines = formatted.split('\n');
+    let inList = false;
+    let result = [];
+
+    lines.forEach(line => {
+      const trimmed = line.trim();
+      if (/^[・\-\*]\s+(.*)/.test(trimmed)) {
+        if (!inList) {
+          result.push('<ul>');
+          inList = true;
+        }
+        result.push(`<li>${trimmed.replace(/^[・\-\*]\s+/, '')}</li>`);
+      } else if (/^\d+\.\s+(.*)/.test(trimmed)) {
+        if (!inList) {
+          result.push('<ol>');
+          inList = true;
+        }
+        result.push(`<li>${trimmed.replace(/^\d+\.\s+/, '')}</li>`);
+      } else {
+        if (inList) {
+          result.push(result[result.length - 1].startsWith('<ol>') ? '</ol>' : '</ul>');
+          inList = false;
+        }
+        if (trimmed) {
+          result.push(`<p>${line}</p>`);
+        }
+      }
+    });
+
+    if (inList) {
+      result.push('</ul>');
+    }
+
+    return result.join('');
+  },
+
+  async sendChatMessageFromInput() {
+    const input = document.getElementById('chat-input');
+    if (!input) return;
+    const text = input.value.trim();
+    if (!text) return;
+    input.value = '';
+    input.style.height = 'auto';
+    await this.sendChatMessage(text);
+  },
+
+  async sendQuickChat(text) {
+    this.switchTab('chat');
+    await this.sendChatMessage(text);
+  },
+
+  async sendChatMessage(userText) {
+    if (!userText) return;
+
+    if (!this.state.apiKey) {
+      this.showToast('Gemini APIキーを設定してください', 'error');
+      this.openApiModal();
+      return;
+    }
+
+    // ユーザーメッセージを記録
+    const userMsg = {
+      role: 'user',
+      content: userText,
+      timestamp: Date.now()
+    };
+    this.state.chatHistory.push(userMsg);
+    this.renderChatHistory(true);
+
+    // タイピングインジケーター表示
+    const container = document.getElementById('chat-messages');
+    const typingEl = document.createElement('div');
+    typingEl.className = 'chat-msg ai';
+    typingEl.id = 'chat-typing-indicator';
+    typingEl.innerHTML = `
+      <div class="chat-avatar">👩‍⚕️</div>
+      <div class="chat-bubble">
+        <div class="typing-dots">
+          <span></span><span></span><span></span>
+        </div>
+      </div>
+    `;
+    container.appendChild(typingEl);
+    container.scrollTop = container.scrollHeight;
+
+    // 送信ボタンの無効化
+    const sendBtn = document.getElementById('btn-send-chat');
+    if (sendBtn) sendBtn.disabled = true;
+
+    try {
+      // コンテキストデータの収集
+      const ub = this.state.userBody || {};
+      const age = this.getAge(ub.birthDate);
+      const genderStr = ub.gender === 'female' ? '女性' : ub.gender === 'male' ? '男性' : 'その他';
+      const curW = ub.currentWeight || 65;
+      const tarW = ub.targetWeight || 60;
+      const bpSys = ub.bloodPressureSystolic || 120;
+      const bpDia = ub.bloodPressureDiastolic || 80;
+      const goalCal = this.state.goals?.calories || 1800;
+      const routine = ub.routineNotes || '未設定';
+
+      const now = new Date();
+      const todayStr = now.getFullYear() + '-' + String(now.getMonth() + 1).padStart(2, '0') + '-' + String(now.getDate()).padStart(2, '0');
+
+      const todayMeals = this.state.mealHistory.filter(m => {
+        const d = new Date(m.timestamp);
+        return (d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0')) === todayStr;
+      });
+
+      let todayCal = 0, todayP = 0, todayF = 0, todayC = 0, todaySodium = 0;
+      let mealListStr = '';
+      todayMeals.forEach(m => {
+        todayCal += (m.calories || 0);
+        todayP += (m.pfc?.protein || 0);
+        todayF += (m.pfc?.fat || 0);
+        todayC += (m.pfc?.carbs || 0);
+        todaySodium += (m.nutrients?.sodium || 0);
+        const time = new Date(m.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+        mealListStr += `・[${time}] ${m.foodName} (${m.calories}kcal, P:${m.pfc?.protein || 0}g, F:${m.pfc?.fat || 0}g, C:${m.pfc?.carbs || 0}g, 塩分換算約:${((m.nutrients?.sodium || 0) * 2.54 / 1000).toFixed(1)}g)\n`;
+      });
+      if (!mealListStr) mealListStr = '（本日の食事記録はまだありません）';
+
+      // 直近の対話履歴（過去5件）
+      const recentDialog = this.state.chatHistory.slice(-6, -1).map(h => `${h.role === 'user' ? 'ユーザー' : '管理栄養士AI'}: ${h.content}`).join('\n');
+
+      const prompt = `あなたは親切で専門性の高い専属管理栄養士・ヘルスケアAIです。
+ユーザーからの食事・栄養・献立・健康に関する相談や質問に対して、温かく寄り添いながら、科学的根拠に基づいた実践的なアドバイスを日本語で回答してください。
+
+【ユーザー身体・健康データ】
+- 年齢: ${age !== null ? `${age}歳` : '未設定'}
+- 性別: ${genderStr}
+- 現在の体重: ${curW}kg (目標体重: ${tarW}kg)
+- 現在の血圧: ${bpSys}/${bpDia} mmHg
+- 1日目標カロリー: ${goalCal}kcal (PFC目標: タンパク質${this.state.goals?.protein || 90}g, 脂質${this.state.goals?.fat || 45}g, 炭水化物${this.state.goals?.carbs || 220}g)
+- 生活習慣・ルーティン・特記事項: ${routine}
+
+【本日の食事摂取状況 (${todayStr})】
+- 総摂取カロリー: ${todayCal} kcal (目標との差: ${todayCal - goalCal > 0 ? '+' : ''}${todayCal - goalCal} kcal)
+- PFC合計: タンパク質 ${todayP}g, 脂質 ${todayF}g, 炭水化物 ${todayC}g
+- ナトリウム合計: ${todaySodium}mg (食塩相当量 約${(todaySodium * 2.54 / 1000).toFixed(1)}g)
+- 本日の食事記録一覧:
+${mealListStr}
+
+${recentDialog ? `【これまでの対話の文脈】\n${recentDialog}\n` : ''}
+
+【ユーザーからのメッセージ・質問】
+${userText}
+
+【回答ガイドライン】
+1. ユーザーの身体データや本日の食事記録、生活ルーティンを適宜参照し、ユーザー一人ひとりの現状に合わせた具体的・実践的な回答を行ってください。
+2. 箇条書きや重要なポイントの太字（**強調**）を適度に使って、スマホ画面でも読みやすく整理してください。
+3. 専門的でありつつも親しみやすく、モチベーションを高めるトーンを心がけてください。
+4. JSONではなく、通常の自然な日本語テキスト（マークダウン形式）で直接回答してください。`;
+
+      const aiResponseText = await this.executeGeminiGenerate({
+        prompt,
+        isJson: false,
+        temperature: 0.7
+      });
+
+      const aiMsg = {
+        role: 'ai',
+        content: aiResponseText || '申し訳ありません。アドバイスの生成に失敗しました。もう一度お試しください。',
+        timestamp: Date.now()
+      };
+      this.state.chatHistory.push(aiMsg);
+      await this.saveToStorage();
+
+    } catch (err) {
+      console.error('Chat error:', err);
+      const errMsg = {
+        role: 'ai',
+        content: `エラーが発生しました: ${err.message}\nAPIキーや通信状況をご確認の上、再度お試しください。`,
+        timestamp: Date.now()
+      };
+      this.state.chatHistory.push(errMsg);
+    } finally {
+      const typing = document.getElementById('chat-typing-indicator');
+      if (typing) typing.remove();
+      if (sendBtn) sendBtn.disabled = false;
+      this.renderChatHistory(true);
+    }
+  },
+
+  async clearChatHistory() {
+    if (!this.state.chatHistory || this.state.chatHistory.length === 0) {
+      this.showToast('チャット履歴はありません', 'info');
+      return;
+    }
+    if (confirm('チャットの対話履歴を消去しますか？')) {
+      this.state.chatHistory = [];
+      await this.saveToStorage();
+      this.renderChatHistory(true);
+      this.showToast('チャット履歴を消去しました', 'info');
+    }
+  },
+
+  askAboutCurrentDetail() {
+    if (!this.state.currentDetailId) return;
+    const meal = this.state.mealHistory.find(m => m.id === this.state.currentDetailId);
+    if (!meal) return;
+
+    this.closeMealDetail();
+    this.switchTab('chat');
+
+    const promptText = `「${meal.foodName}」(${meal.calories}kcal, P:${meal.pfc?.protein || 0}g, F:${meal.pfc?.fat || 0}g, C:${meal.pfc?.carbs || 0}g) を食べたのですが、この食事についての評価や、次の食事で調整すべきアドバイスを教えてください。`;
+
+    setTimeout(() => {
+      const chatInput = document.getElementById('chat-input');
+      if (chatInput) {
+        chatInput.value = promptText;
+        chatInput.style.height = 'auto';
+        chatInput.style.height = Math.min(chatInput.scrollHeight, 100) + 'px';
+        chatInput.focus();
+      }
+    }, 200);
   },
 
   // ===== Toast Notifications =====

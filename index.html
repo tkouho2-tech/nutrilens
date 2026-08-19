@@ -8,7 +8,7 @@
   <meta http-equiv="Expires" content="0">
   <title>NutriLens — AI食事栄養分析アプリ</title>
   <meta name="description" content="食事の写真を撮るだけでAIがカロリーや栄養素を自動分析。毎日の健康管理をスマートにサポートします。">
-  <link rel="stylesheet" href="style.css?v=1.0.25">
+  <link rel="stylesheet" href="style.css?v=1.0.26">
 </head>
 <body>
 
@@ -22,7 +22,7 @@
       <div>
         <div style="display: flex; align-items: center; gap: 8px;">
           <div class="logo-text">NutriLens</div>
-          <span class="app-version-badge" id="app-version">v1.0.25</span>
+          <span class="app-version-badge" id="app-version">v1.0.26</span>
         </div>
         <div class="logo-subtitle">AI栄養分析</div>
       </div>
@@ -326,6 +326,57 @@
 
   </section>
 
+  <!-- ====== TAB: AI相談（チャット） ====== -->
+  <section id="tab-chat" class="tab-panel">
+    <div class="chat-container">
+      <!-- Chat Header -->
+      <div class="chat-header-bar">
+        <div style="display:flex;align-items:center;gap:8px">
+          <div style="font-size:15px;font-weight:700;color:var(--text-primary)">💬 専属管理栄養士AI</div>
+          <span class="chat-context-badge">
+            <span class="chat-context-dot"></span>健康・食事データ連携中
+          </span>
+        </div>
+        <button class="btn btn-ghost btn-icon" id="btn-clear-chat" title="チャット履歴を消去" style="width:32px;height:32px;font-size:13px">🗑️</button>
+      </div>
+
+      <!-- Messages Area -->
+      <div class="chat-messages" id="chat-messages">
+        <!-- AI Welcome Message -->
+        <div class="chat-msg ai">
+          <div class="chat-avatar">👩‍⚕️</div>
+          <div class="chat-bubble">
+            <p>こんにちは！あなたの専属管理栄養士AIです🌿</p>
+            <p>本日の食事記録や目標（カロリー・PFC・血圧）、生活ルーティンを踏まえて、最適な食事アドバイスや疑問にお答えします。何でもお気軽にご相談ください！</p>
+          </div>
+        </div>
+      </div>
+
+      <!-- Quick Chips -->
+      <div class="chat-quick-chips">
+        <span class="chat-chip" onclick="App.sendQuickChat('今日の栄養バランスと改善ポイントを教えて')">🥗 今日の栄養バランス</span>
+        <span class="chat-chip" onclick="App.sendQuickChat('夕食におすすめの献立・メニューを提案して')">🍽️ 夕食メニュー相談</span>
+        <span class="chat-chip" onclick="App.sendQuickChat('今日の食事で塩分や血圧に気をつけるべき点は？')">🧂 塩分・血圧アドバイス</span>
+        <span class="chat-chip" onclick="App.sendQuickChat('筋トレ・運動後に良いおすすめの食べ物は？')">💪 筋トレ・運動後フード</span>
+        <span class="chat-chip" onclick="App.sendQuickChat('間食や甘いものを控える良い方法は？')">🍪 間食の抑え方</span>
+      </div>
+
+      <!-- Input Area -->
+      <div class="chat-input-area">
+        <textarea
+          class="chat-textarea"
+          id="chat-input"
+          rows="1"
+          placeholder="食事の質問やアドバイスを相談..."
+          aria-label="AI相談メッセージ入力"
+        ></textarea>
+        <button class="chat-send-btn" id="btn-send-chat" title="送信" aria-label="送信">
+          <span>➤</span>
+        </button>
+      </div>
+    </div>
+  </section>
+
   <!-- ====== TAB: 履歴 ====== -->
   <section id="tab-history" class="tab-panel">
 
@@ -534,6 +585,10 @@
     <span class="nav-btn-icon">📊</span>
     <span class="nav-btn-label">今日</span>
   </button>
+  <button class="nav-btn" data-tab="chat" id="nav-chat">
+    <span class="nav-btn-icon">💬</span>
+    <span class="nav-btn-label">相談</span>
+  </button>
   <button class="nav-btn" data-tab="history" id="nav-history">
     <span class="nav-btn-icon">🗂️</span>
     <span class="nav-btn-label">履歴</span>
@@ -636,6 +691,13 @@
         <div class="ai-avatar">🤖</div>
         <div class="ai-comment-text" id="detail-ai-comment"></div>
         <button class="btn btn-ghost btn-icon" id="btn-speak-detail" style="margin-left:auto; align-self:center;" title="読み上げる" onclick="App.speak(document.getElementById('detail-ai-comment').textContent)">🔊</button>
+      </div>
+
+      <!-- Action: Ask AI about this meal -->
+      <div style="margin-top:14px">
+        <button class="btn btn-primary" onclick="App.askAboutCurrentDetail()" style="width:100%;padding:12px;font-weight:600;display:flex;align-items:center;justify-content:center;gap:8px">
+          <span>💬 この食事についてAIに質問・相談する</span>
+        </button>
       </div>
 
     </div><!-- .detail-modal-body -->
@@ -819,6 +881,6 @@
 <!-- ===== Toast Container ===== -->
 <div class="toast-container" id="toast-container"></div>
 
-<script src="app.js?v=1.0.25"></script>
+<script src="app.js?v=1.0.26"></script>
 </body>
 </html>
