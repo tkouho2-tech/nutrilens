@@ -8,7 +8,7 @@
   <meta http-equiv="Expires" content="0">
   <title>NutriLens — AI食事栄養分析アプリ</title>
   <meta name="description" content="食事の写真を撮るだけでAIがカロリーや栄養素を自動分析。毎日の健康管理をスマートにサポートします。">
-  <link rel="stylesheet" href="style.css?v=1.0.26">
+  <link rel="stylesheet" href="style.css?v=1.0.27">
 </head>
 <body>
 
@@ -22,7 +22,7 @@
       <div>
         <div style="display: flex; align-items: center; gap: 8px;">
           <div class="logo-text">NutriLens</div>
-          <span class="app-version-badge" id="app-version">v1.0.26</span>
+          <span class="app-version-badge" id="app-version">v1.0.27</span>
         </div>
         <div class="logo-subtitle">AI栄養分析</div>
       </div>
@@ -363,11 +363,14 @@
 
       <!-- Input Area -->
       <div class="chat-input-area">
+        <button class="chat-mic-btn" id="btn-mic-chat" type="button" title="音声で入力" aria-label="音声入力開始">
+          <span class="mic-icon">🎙️</span>
+        </button>
         <textarea
           class="chat-textarea"
           id="chat-input"
           rows="1"
-          placeholder="食事の質問やアドバイスを相談..."
+          placeholder="食事の質問やアドバイスを相談（音声入力も可能）..."
           aria-label="AI相談メッセージ入力"
         ></textarea>
         <button class="chat-send-btn" id="btn-send-chat" title="送信" aria-label="送信">
@@ -399,14 +402,20 @@
     <div id="goal-section">
       <div class="section-title"><span class="icon">⚖️</span>体重＆身体目標設定</div>
       <div class="glass-card goal-card">
-        <p style="font-size:13px;color:var(--text-muted);margin:-4px 0 16px 0">
-          生年月日・性別・体重・血圧を設定すると、あなたに最適化されたカロリー・PFCおよび健康アドバイスをAIが分析します。
+        <p class="goal-card-desc">
+          お名前・生年月日・性別・体重・血圧を設定すると、あなたに最適化されたカロリー・PFCおよび健康アドバイスをAIが分析します。
         </p>
+
+        <!-- User Name Input -->
+        <div class="form-group" style="margin-bottom:16px">
+          <label class="form-label" for="user-name">👤 お名前（ニックネーム） <span class="form-label-sub">(AIの呼びかけ・個別アドバイスに反映)</span></label>
+          <input type="text" class="form-input" id="user-name" placeholder="例: こうほ" maxlength="20">
+        </div>
 
         <!-- Profile Inputs (Birthdate & Gender) -->
         <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:16px">
           <div class="form-group">
-            <label class="form-label" for="user-birthdate">📅 生年月日 <span id="user-age-preview" style="font-size:11px;color:var(--primary);margin-left:4px"></span></label>
+            <label class="form-label" for="user-birthdate">📅 生年月日 <span id="user-age-preview" style="font-size:11px;color:var(--accent-primary);margin-left:4px"></span></label>
             <input type="date" class="form-input" id="user-birthdate" onchange="App.onBirthdateChange()">
           </div>
           <div class="form-group">
@@ -437,11 +446,11 @@
           <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">
             <div class="form-group">
               <input type="number" class="form-input" id="user-bp-systolic" min="50" max="250" step="1" placeholder="最高 (例 120)">
-              <div style="font-size:10px;color:var(--text-muted);margin-top:3px;text-align:center">最高 / 収縮期</div>
+              <div class="form-hint">最高 / 収縮期</div>
             </div>
             <div class="form-group">
               <input type="number" class="form-input" id="user-bp-diastolic" min="30" max="180" step="1" placeholder="最低 (例 80)">
-              <div style="font-size:10px;color:var(--text-muted);margin-top:3px;text-align:center">最低 / 拡張期</div>
+              <div class="form-hint">最低 / 拡張期</div>
             </div>
           </div>
         </div>
@@ -458,12 +467,12 @@
         <!-- Routine & Special Notes for AI Analysis -->
         <div class="form-group" style="margin-bottom:16px">
           <div style="display:flex;align-items:center;justify-content:space-between">
-            <label class="form-label" for="user-routine-notes" style="margin-bottom:0">📝 生活ルーティン・健康メモ <span style="font-size:10px;color:var(--primary);text-transform:none;letter-spacing:0">(AI分析に反映)</span></label>
-            <span style="font-size:11px;color:var(--text-muted)">自由記述</span>
+            <label class="form-label" for="user-routine-notes" style="margin-bottom:0">📝 生活ルーティン・健康メモ <span class="form-label-highlight">(AI分析に反映)</span></label>
+            <span class="form-badge-tag">自由記述</span>
           </div>
-          <textarea class="form-textarea" id="user-routine-notes" rows="3" placeholder="例: 朝食はプロテインのみ / 夕食は糖質オフ / 週3回筋トレ / 減塩を意識している / 乳製品・小麦アレルギーあり / カフェインを控えたい など"></textarea>
-          <div style="font-size:11px;color:var(--text-muted);margin-top:2px">
-            💡 入力された習慣や好みに合わせて、AIが毎回の食事や1日の総括でより実践的なアドバイスを提供します。
+          <textarea class="form-textarea routine-textarea" id="user-routine-notes" rows="6" placeholder="例:&#10;・朝食はプロテインのみ&#10;・夕食は糖質オフ（20時以降は食べない）&#10;・週3回筋トレ / 減塩を意識している&#10;・乳製品・小麦アレルギーあり / カフェインを控えたい など"></textarea>
+          <div class="form-routine-tip">
+            💡 入力された習慣や好みに合わせて、AIが毎回の食事や1日の総括、相談チャットでより実践的なアドバイスを提供します。
           </div>
           <!-- Quick Routine Tags -->
           <div class="routine-tags-container">
@@ -881,6 +890,6 @@
 <!-- ===== Toast Container ===== -->
 <div class="toast-container" id="toast-container"></div>
 
-<script src="app.js?v=1.0.26"></script>
+<script src="app.js?v=1.0.27"></script>
 </body>
 </html>

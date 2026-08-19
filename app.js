@@ -2,7 +2,7 @@
 
 const App = {
   // Version
-  version: 'v1.0.26',
+  version: 'v1.0.27',
 
   // State
   state: {
@@ -21,6 +21,7 @@ const App = {
     dailySummaries: {},
     chatHistory: [],
     userBody: {
+      userName: '',
       birthDate: '',
       gender: 'male',
       currentWeight: 65,
@@ -279,9 +280,17 @@ const App = {
     const chatInput = document.getElementById('chat-input');
     const sendChatBtn = document.getElementById('btn-send-chat');
     const clearChatBtn = document.getElementById('btn-clear-chat');
+    const micChatBtn = document.getElementById('btn-mic-chat');
+
+    if (micChatBtn) {
+      micChatBtn.addEventListener('click', () => this.toggleSpeechRecognition());
+    }
 
     if (sendChatBtn) {
-      sendChatBtn.addEventListener('click', () => this.sendChatMessageFromInput());
+      sendChatBtn.addEventListener('click', () => {
+        this.stopSpeechRecognition();
+        this.sendChatMessageFromInput();
+      });
     }
 
     if (clearChatBtn) {
@@ -292,6 +301,7 @@ const App = {
       chatInput.addEventListener('keydown', (e) => {
         if (e.key === 'Enter' && !e.shiftKey) {
           e.preventDefault();
+          this.stopSpeechRecognition();
           this.sendChatMessageFromInput();
         }
       });
@@ -632,6 +642,7 @@ const App = {
 
   async callGeminiApi(base64Image) {
     const ub = this.state.userBody || {};
+    const uName = ub.userName ? `${ub.userName}さん` : '';
     const curW = ub.currentWeight || 65;
     const tarW = ub.targetWeight || 60;
     const goalCal = this.state.goals?.calories || 1800;
@@ -642,6 +653,7 @@ const App = {
       ? `血圧:${ub.bloodPressureSystolic}/${ub.bloodPressureDiastolic}mmHg`
       : '';
     const extraInfo = [
+      uName,
       age !== null ? `${age}歳` : '',
       genderStr,
       bpStr
@@ -654,7 +666,7 @@ const App = {
 
     const prompt = `この料理の写真を詳しく分析して、以下のJSON形式で栄養情報を返してください。
 ユーザーの身体・目標・生活ルーティン情報: 【${goalStr}】
-aiCommentには、このユーザーの目標（${diff < 0 ? '減量' : diff > 0 ? '増量' : '維持'}）および生活ルーティン・特記事項（設定されている場合）を考慮した個別アドバイスに加えて、分析した特徴的な栄養素が体にどのような効果（メリット）や悪影響（デメリット）をもたらすかを具体的に含め、日本語3〜4文程度で記述してください。
+aiCommentには、このユーザー（${uName || 'ユーザー'}）の目標（${diff < 0 ? '減量' : diff > 0 ? '増量' : '維持'}）および生活ルーティン・特記事項（設定されている場合）を考慮した個別アドバイスに加えて、分析した特徴的な栄養素が体にどのような効果（メリット）や悪影響（デメリット）をもたらすかを具体的に含め、日本語3〜4文程度で記述してください。${uName ? `可能であれば文頭などで自然に「${uName}」と呼びかけてください。` : ''}
 推定値で構いません。必ずJSON形式のみで返し、説明文は不要です。
 itemsには写真に写っている個々のおかず・食材をそれぞれ列挙してください。
 
@@ -1671,24 +1683,189 @@ itemsには写真に写っている個々のおかず・食材をそれぞれ列
     if (aiEl) aiEl.textContent = meal.aiComment || '';
   },
 
-  // ===== Text-to-Speech (TTS) =====
-  speak(text) {
+  // ===== Text-to-Speech (TTS) & Speech Recognition =====
+  recognition: null,
+  isRecognizingSpeech: false,
+  currentSpeakingBtn: null,
+
+  toggleSpeechRecognition() {
+    if (this.isRecognizingSpeech) {
+      this.stopSpeechRecognition();
+    } else {
+      this.startSpeechRecognition();
+    }
+  },
+
+  startSpeechRecognition() {
+    const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+    if (!SpeechRecognition) {
+      this.showToast('お使いのブラウザは音声認識に対応していません', 'error');
+      return;
+    }
+
+    try {
+      if (this.recognition) {
+        try { this.recognition.abort(); } catch (e) {}
+      }
+      const recog = new SpeechRecognition();
+      recog.lang = 'ja-JP';
+      recog.interimResults = true;
+      recog.continuous = false;
+
+      const micBtn = document.getElementById('btn-mic-chat');
+      const chatInput = document.getElementById('chat-input');
+      let baseText = chatInput ? chatInput.value : '';
+
+      recog.onstart = () => {
+        this.isRecognizingSpeech = true;
+        if (micBtn) {
+          micBtn.classList.add('recording');
+          micBtn.title = '音声入力中...クリックで終了';
+          micBtn.setAttribute('aria-label', '音声入力中');
+        }
+        this.showToast('🎙️ 音声入力中...お話しください', 'info');
+      };
+
+      recog.onresult = (e) => {
+        let interim = '';
+        let final = '';
+        for (let i = e.resultIndex; i < e.results.length; ++i) {
+          if (e.results[i].isFinal) {
+            final += e.results[i][0].transcript;
+          } else {
+            interim += e.results[i][0].transcript;
+          }
+        }
+        if (chatInput) {
+          const prefix = baseText ? (baseText.endsWith(' ') || baseText.endsWith('\n') ? baseText : baseText + ' ') : '';
+          const currentResult = final || interim;
+          chatInput.value = prefix + currentResult;
+          chatInput.style.height = 'auto';
+          chatInput.style.height = Math.min(chatInput.scrollHeight, 100) + 'px';
+        }
+      };
+
+      recog.onerror = (e) => {
+        console.warn('音声認識エラー:', e.error);
+        if (e.error === 'not-allowed') {
+          this.showToast('マイクの使用が許可されていません（ブラウザの設定をご確認ください）', 'error');
+        } else if (e.error !== 'no-speech') {
+          this.showToast(`音声認識エラー: ${e.error}`, 'error');
+        }
+        this.stopSpeechRecognition();
+      };
+
+      recog.onend = () => {
+        this.stopSpeechRecognition();
+      };
+
+      this.recognition = recog;
+      recog.start();
+    } catch (err) {
+      console.error('Speech recognition failed to start:', err);
+      this.showToast('音声認識の開始に失敗しました', 'error');
+      this.stopSpeechRecognition();
+    }
+  },
+
+  stopSpeechRecognition() {
+    this.isRecognizingSpeech = false;
+    const micBtn = document.getElementById('btn-mic-chat');
+    if (micBtn) {
+      micBtn.classList.remove('recording');
+      micBtn.title = '音声で入力';
+      micBtn.setAttribute('aria-label', '音声入力開始');
+    }
+    if (this.recognition) {
+      try { this.recognition.stop(); } catch (e) {}
+      this.recognition = null;
+    }
+  },
+
+  speak(text, btnElement = null) {
     if (!text) return;
-    if ('speechSynthesis' in window) {
-      if (window.speechSynthesis.speaking) {
-        window.speechSynthesis.cancel();
+    if (!('speechSynthesis' in window)) {
+      this.showToast('お使いのブラウザは音声読み上げに対応していません', 'error');
+      return;
+    }
+
+    // 既に再生中の場合は停止処理
+    if (window.speechSynthesis.speaking) {
+      window.speechSynthesis.cancel();
+      if (this.currentSpeakingBtn) {
+        this.currentSpeakingBtn.classList.remove('speaking');
+        const label = this.currentSpeakingBtn.querySelector('.chat-speak-label');
+        if (label) label.textContent = '読み上げ';
+        const icon = this.currentSpeakingBtn.querySelector('.chat-speak-icon');
+        if (icon) icon.textContent = '🔊';
+        if (this.currentSpeakingBtn.tagName === 'BUTTON' && !label && !icon) {
+          this.currentSpeakingBtn.textContent = '🔊';
+        }
+      }
+      // 同じボタンを押して停止した場合はそのまま終了
+      if (this.currentSpeakingBtn === btnElement) {
+        this.currentSpeakingBtn = null;
         return;
       }
-      window.speechSynthesis.cancel();
-      const utterance = new SpeechSynthesisUtterance(text);
-      utterance.lang = 'ja-JP';
-      // 自然で聞き取りやすい速度とピッチ
-      utterance.rate = 1.05;
-      utterance.pitch = 1.0;
-      window.speechSynthesis.speak(utterance);
-    } else {
-      this.showToast('お使いのブラウザは音声読み上げに対応していません', 'error');
     }
+
+    // 読み上げテキストからMarkdown記号や絵文字等を取り除いて聞きやすく整形
+    const cleanText = text
+      .replace(/[*#_`~>]/g, '')
+      .replace(/https?:\/\/\S+/g, '')
+      .replace(/^[・\-\*]\s+/gm, '')
+      .trim();
+
+    if (!cleanText) return;
+
+    window.speechSynthesis.cancel();
+    const utterance = new SpeechSynthesisUtterance(cleanText);
+    utterance.lang = 'ja-JP';
+    utterance.rate = 1.05;
+    utterance.pitch = 1.0;
+
+    if (btnElement) {
+      this.currentSpeakingBtn = btnElement;
+      btnElement.classList.add('speaking');
+      const label = btnElement.querySelector('.chat-speak-label');
+      if (label) label.textContent = '停止';
+      const icon = btnElement.querySelector('.chat-speak-icon');
+      if (icon) icon.textContent = '⏹️';
+      if (btnElement.tagName === 'BUTTON' && !label && !icon) {
+        btnElement.textContent = '⏹️';
+      }
+    }
+
+    utterance.onend = () => {
+      if (btnElement) {
+        btnElement.classList.remove('speaking');
+        const label = btnElement.querySelector('.chat-speak-label');
+        if (label) label.textContent = '読み上げ';
+        const icon = btnElement.querySelector('.chat-speak-icon');
+        if (icon) icon.textContent = '🔊';
+        if (btnElement.tagName === 'BUTTON' && !label && !icon) {
+          btnElement.textContent = '🔊';
+        }
+      }
+      this.currentSpeakingBtn = null;
+    };
+
+    utterance.onerror = (e) => {
+      console.warn('TTSエラー:', e);
+      if (btnElement) {
+        btnElement.classList.remove('speaking');
+        const label = btnElement.querySelector('.chat-speak-label');
+        if (label) label.textContent = '読み上げ';
+        const icon = btnElement.querySelector('.chat-speak-icon');
+        if (icon) icon.textContent = '🔊';
+        if (btnElement.tagName === 'BUTTON' && !label && !icon) {
+          btnElement.textContent = '🔊';
+        }
+      }
+      this.currentSpeakingBtn = null;
+    };
+
+    window.speechSynthesis.speak(utterance);
   },
 
   async clearHistory() {
@@ -1901,15 +2078,16 @@ itemsには写真に写っている個々のおかず・食材をそれぞれ列
     const bpDia = measurementData?.bpDia ?? ub.bloodPressureDiastolic ?? 80;
     const age = this.getAge(ub.birthDate);
     const genderStr = ub.gender === 'female' ? '女性' : ub.gender === 'male' ? '男性' : 'その他';
+    const uName = ub.userName ? `${ub.userName}さん` : '';
 
     let mode = '維持';
     if (tarW < curW) mode = '減量';
     if (tarW > curW) mode = '増量';
 
-    const prompt = `あなたはプロの医師・管理栄養士AIです。以下のユーザーの身体情報（年齢・性別・体重・血圧）と「1日の食事記録」を総合的に分析し、医学的・栄養学的な総括アドバイスを生成してください。
+    const prompt = `あなたはプロの医師・管理栄養士AIです。以下のユーザーの身体情報（お名前・年齢・性別・体重・血圧）と「1日の食事記録」を総合的に分析し、医学的・栄養学的な総括アドバイスを生成してください。
 
 【ユーザー身体・健康データ】
-年齢: ${age !== null ? `${age}歳` : '未設定'}
+${uName ? `お名前: ${uName}\n` : ''}年齢: ${age !== null ? `${age}歳` : '未設定'}
 性別: ${genderStr}
 現在の体重: ${curW}kg (目標: ${tarW}kg, ${mode}目標)
 現在の血圧: ${bpSys}/${bpDia} mmHg (収縮期${bpSys} / 拡張期${bpDia})
@@ -1923,7 +2101,7 @@ itemsには写真に写っている個々のおかず・食材をそれぞれ列
 ${mealsSummaryText}
 
 【総括指示】
-これらのデータを元に、1日の総括となるAIアドバイス（日本語、4〜5文程度）を作成してください。
+これらのデータを元に、1日の総括となるAIアドバイス（日本語、4〜5文程度）を作成してください。${uName ? `文頭などで自然に「${uName}、今日もお疲れ様でした！」のように呼びかけてください。` : ''}
 以下の内容を必ず含めてください：
 1. カロリーおよびPFCの摂取バランス評価
 2. ユーザーの年齢・性別・体重目標に対するフィードバック
@@ -1972,6 +2150,7 @@ ${mealsSummaryText}
 
   // ===== Goal Settings =====
   calculateGoalsFromWeight() {
+    const nameEl = document.getElementById('user-name');
     const curWEl = document.getElementById('user-current-weight');
     const tarWEl = document.getElementById('user-target-weight');
     const actEl = document.getElementById('user-activity-level');
@@ -1981,6 +2160,7 @@ ${mealsSummaryText}
     const bpDiaEl = document.getElementById('user-bp-diastolic');
     if (!curWEl || !tarWEl || !actEl) return null;
 
+    const userName = nameEl?.value?.trim() || this.state.userBody.userName || '';
     const currentWeight = parseFloat(curWEl.value) || 65;
     const targetWeight = parseFloat(tarWEl.value) || 60;
     const activity = actEl.value || 'moderate';
@@ -1991,6 +2171,7 @@ ${mealsSummaryText}
 
     this.state.userBody = {
       ...this.state.userBody,
+      userName,
       birthDate,
       gender,
       currentWeight,
@@ -2065,10 +2246,11 @@ ${mealsSummaryText}
 
   renderGoals() {
     const ub = this.state.userBody || {
-      birthDate: '', gender: 'male', currentWeight: 65, targetWeight: 60,
+      userName: '', birthDate: '', gender: 'male', currentWeight: 65, targetWeight: 60,
       activityLevel: 'moderate', bloodPressureSystolic: 120, bloodPressureDiastolic: 80,
       routineNotes: ''
     };
+    const nameEl = document.getElementById('user-name');
     const birthEl = document.getElementById('user-birthdate');
     const genderEl = document.getElementById('user-gender');
     const curWEl = document.getElementById('user-current-weight');
@@ -2078,6 +2260,7 @@ ${mealsSummaryText}
     const bpDiaEl = document.getElementById('user-bp-diastolic');
     const routineEl = document.getElementById('user-routine-notes');
 
+    if (nameEl) nameEl.value = ub.userName || '';
     if (birthEl) {
       birthEl.value = ub.birthDate || '';
       const age = this.getAge(ub.birthDate);
@@ -2115,9 +2298,9 @@ ${mealsSummaryText}
       return;
     }
     if (curVal.length > 0) {
-      el.value = `${curVal} / ${tagText}`;
+      el.value = `${curVal}\n・${tagText}`;
     } else {
-      el.value = tagText;
+      el.value = `・${tagText}`;
     }
     el.focus();
   },
@@ -2131,6 +2314,7 @@ ${mealsSummaryText}
       carbs: parseInt(document.getElementById('goal-carbs').value) || calc.carbs || 220,
     };
 
+    const userName = document.getElementById('user-name')?.value?.trim() || '';
     const birthDate = document.getElementById('user-birthdate')?.value || '';
     const gender = document.getElementById('user-gender')?.value || 'male';
     const curW = parseFloat(document.getElementById('user-current-weight')?.value) || 65;
@@ -2141,6 +2325,7 @@ ${mealsSummaryText}
     const routineNotes = document.getElementById('user-routine-notes')?.value?.trim() || '';
 
     this.state.userBody = {
+      userName,
       birthDate,
       gender,
       currentWeight: curW,
@@ -2153,7 +2338,8 @@ ${mealsSummaryText}
 
     await this.saveToStorage();
     this.renderDashboard();
-    this.showToast('身体情報・目標・生活ルーティンを保存しました！', 'success');
+    this.renderChatHistory();
+    this.showToast('お名前・身体情報・目標・生活ルーティンを保存しました！', 'success');
   },
 
   // ===== API Modal =====
@@ -2217,14 +2403,25 @@ ${mealsSummaryText}
 
     container.innerHTML = '';
 
+    const userName = this.state.userBody?.userName;
+    const greetingName = userName ? `${userName}さん、` : '';
+
     // ウェルカムメッセージ
     const welcomeEl = document.createElement('div');
     welcomeEl.className = 'chat-msg ai';
     welcomeEl.innerHTML = `
       <div class="chat-avatar">👩‍⚕️</div>
       <div class="chat-bubble">
-        <p>こんにちは！あなたの専属管理栄養士AIです🌿</p>
-        <p>本日の食事記録や目標（カロリー・PFC・血圧）、生活ルーティンを踏まえて、最適な食事アドバイスや疑問にお答えします。何でもお気軽にご相談ください！</p>
+        <div>
+          <p>こんにちは！${greetingName}あなたの専属管理栄養士AIです🌿</p>
+          <p>本日の食事記録や目標（カロリー・PFC・血圧）、生活ルーティンを踏まえて、最適な食事アドバイスや献立の疑問にお答えします。音声入力（🎙️）や読み上げ（🔊）も可能です。何でもお気軽にご相談ください！</p>
+        </div>
+        <div class="chat-msg-footer">
+          <button class="chat-speak-btn" onclick="App.speak(this.closest('.chat-bubble').querySelector('div').innerText, this)" title="メッセージを音声で読み上げ">
+            <span class="chat-speak-icon">🔊</span>
+            <span class="chat-speak-label">読み上げ</span>
+          </button>
+        </div>
       </div>
     `;
     container.appendChild(welcomeEl);
@@ -2248,7 +2445,13 @@ ${mealsSummaryText}
           <div class="chat-avatar">👩‍⚕️</div>
           <div class="chat-bubble">
             <div>${this.formatChatMarkdown(msg.content)}</div>
-            ${timeStr ? `<div class="chat-msg-time">${timeStr}</div>` : ''}
+            <div class="chat-msg-footer">
+              <button class="chat-speak-btn" onclick="App.speak(this.closest('.chat-bubble').querySelector('div').innerText, this)" title="回答を音声で読み上げ">
+                <span class="chat-speak-icon">🔊</span>
+                <span class="chat-speak-label">読み上げ</span>
+              </button>
+              ${timeStr ? `<div class="chat-msg-time">${timeStr}</div>` : ''}
+            </div>
           </div>
         `;
       }
@@ -2371,6 +2574,7 @@ ${mealsSummaryText}
     try {
       // コンテキストデータの収集
       const ub = this.state.userBody || {};
+      const uName = ub.userName ? `${ub.userName}さん` : '';
       const age = this.getAge(ub.birthDate);
       const genderStr = ub.gender === 'female' ? '女性' : ub.gender === 'male' ? '男性' : 'その他';
       const curW = ub.currentWeight || 65;
@@ -2408,7 +2612,7 @@ ${mealsSummaryText}
 ユーザーからの食事・栄養・献立・健康に関する相談や質問に対して、温かく寄り添いながら、科学的根拠に基づいた実践的なアドバイスを日本語で回答してください。
 
 【ユーザー身体・健康データ】
-- 年齢: ${age !== null ? `${age}歳` : '未設定'}
+${uName ? `- お名前: ${uName}\n` : ''}- 年齢: ${age !== null ? `${age}歳` : '未設定'}
 - 性別: ${genderStr}
 - 現在の体重: ${curW}kg (目標体重: ${tarW}kg)
 - 現在の血圧: ${bpSys}/${bpDia} mmHg
@@ -2429,9 +2633,9 @@ ${userText}
 
 【回答ガイドライン】
 1. ユーザーの身体データや本日の食事記録、生活ルーティンを適宜参照し、ユーザー一人ひとりの現状に合わせた具体的・実践的な回答を行ってください。
-2. 箇条書きや重要なポイントの太字（**強調**）を適度に使って、スマホ画面でも読みやすく整理してください。
-3. 専門的でありつつも親しみやすく、モチベーションを高めるトーンを心がけてください。
-4. JSONではなく、通常の自然な日本語テキスト（マークダウン形式）で直接回答してください。`;
+${uName ? `2. ユーザーのお名前（${uName}）を適宜自然に呼びかけ、親しみやすい対話を行ってください。\n` : ''}3. 箇条書きや重要なポイントの太字（**強調**）を適度に使って、スマホ画面でも読みやすく整理してください。
+4. 専門的でありつつも親しみやすく、モチベーションを高めるトーンを心がけてください。
+5. JSONではなく、通常の自然な日本語テキスト（マークダウン形式）で直接回答してください。`;
 
       const aiResponseText = await this.executeGeminiGenerate({
         prompt,
