@@ -2,13 +2,14 @@
 
 const App = {
   // Version
-  version: 'v1.0.27',
+  version: 'v1.0.28',
 
   // State
   state: {
     currentTab: 'capture',
     apiKey: '',
     selectedModel: 'auto',
+    lastWorkingModel: null,
     imageBase64: null,
     imageDataUrl: null,
     imageMimeType: 'image/jpeg',
@@ -100,6 +101,7 @@ const App = {
         this.state.userBody = data.userBody || this.state.userBody;
         this.state.apiKey = data.apiKey || '';
         this.state.selectedModel = data.selectedModel || 'auto';
+        this.state.lastWorkingModel = data.lastWorkingModel || null;
 
         // 30日を超過した古い記録の自動クリーンアップ
         const cleaned = this.cleanupExpiredMeals(30);
@@ -173,6 +175,7 @@ const App = {
       userBody: this.state.userBody,
       apiKey: this.state.apiKey,
       selectedModel: this.state.selectedModel,
+      lastWorkingModel: this.state.lastWorkingModel,
     };
     try {
       const db = await this.initDB();
@@ -339,8 +342,8 @@ const App = {
     }
 
     try {
-      // iPhone等の高解像度写真対策：Canvasで長辺1200px・JPEG品質0.85に自動圧縮
-      const compressed = await this.compressImage(file, 1200, 0.85);
+      // iPhone等の高解像度写真対策：Canvasで長辺850px・JPEG品質0.72に最適圧縮（通信速度・API応答を最大化）
+      const compressed = await this.compressImage(file, 850, 0.72);
       this.state.imageDataUrl = compressed.dataUrl;
       this.state.imageBase64 = compressed.base64;
       this.state.imageMimeType = compressed.mimeType;
@@ -360,7 +363,7 @@ const App = {
     }
   },
 
-  compressImage(file, maxDimension = 1200, quality = 0.85) {
+  compressImage(file, maxDimension = 850, quality = 0.72) {
     return new Promise((resolve, reject) => {
       const img = new Image();
       const reader = new FileReader();
@@ -385,7 +388,11 @@ const App = {
           canvas.height = height;
 
           const ctx = canvas.getContext('2d');
-          ctx.drawImage(img, 0, 0, width, height);
+          if (ctx) {
+            ctx.imageSmoothingEnabled = true;
+            ctx.imageSmoothingQuality = 'high';
+            ctx.drawImage(img, 0, 0, width, height);
+          }
 
           const resizedDataUrl = canvas.toDataURL('image/jpeg', quality);
           const base64 = resizedDataUrl.split(',')[1];
@@ -438,6 +445,11 @@ const App = {
     }
 
     // Show loading
+    const mainText = document.getElementById('loading-main-text');
+    const subText = document.getElementById('loading-sub-text');
+    if (mainText) mainText.textContent = 'AIが料理を高速分析中...';
+    if (subText) subText.textContent = '⚡ 思考待機なしの爆速モードで解析しています';
+
     document.getElementById('preview-section').style.display = 'none';
     document.getElementById('loading-section').style.display = 'block';
     document.getElementById('result-section').style.display = 'none';
@@ -505,46 +517,44 @@ const App = {
   },
 
   async executeGeminiGenerate({ prompt, base64Image = null, mimeType = 'image/jpeg', temperature = 0.1, isJson = true }) {
-    // 優先推奨モデル順（Gemini 2.5 -> 2.0 -> 1.5）
+    // 高速・安定推奨モデル順（Gemini 2.5 Flash -> 2.0 Flash -> 2.0 Flash Lite -> 1.5 Flash -> 2.5 Pro）
     const preferredOrder = [
       'gemini-2.5-flash',
-      'gemini-2.5-pro',
       'gemini-2.0-flash',
       'gemini-2.0-flash-lite',
       'gemini-1.5-flash',
       'gemini-1.5-flash-latest',
-      'gemini-1.5-pro',
-      'gemini-1.5-pro-latest'
+      'gemini-2.5-pro',
+      'gemini-1.5-pro'
     ];
 
     let modelsToTry = [];
 
-    // 1. ユーザーが特定のモデルを明示選択している場合、それを先頭に
+    // 1. ユーザーが特定のモデルを明示選択している場合、最優先
     if (this.state.selectedModel && this.state.selectedModel !== 'auto') {
       modelsToTry.push(this.state.selectedModel);
     }
 
-    // 2. APIから動的に利用可能モデルを取得
-    const available = await this.getAvailableModels(this.state.apiKey);
-    if (available && available.length > 0) {
-      preferredOrder.forEach(p => {
-        if (available.includes(p) && !modelsToTry.includes(p)) {
-          modelsToTry.push(p);
-        }
-      });
-      available.forEach(m => {
-        if (!modelsToTry.includes(m)) {
-          modelsToTry.push(m);
-        }
-      });
+    // 2. 直近で正常動作した最速モデルがあれば優先
+    if (this.state.lastWorkingModel && !modelsToTry.includes(this.state.lastWorkingModel)) {
+      modelsToTry.push(this.state.lastWorkingModel);
     }
 
-    // 3. 静的フォールバック
+    // 3. 高速推奨モデル順
     preferredOrder.forEach(m => {
       if (!modelsToTry.includes(m)) {
         modelsToTry.push(m);
       }
     });
+
+    // 4. キャッシュされた利用可能モデルから追加（同期的にある場合のみ）
+    if (this._cachedModels && this._cachedModels.length > 0) {
+      this._cachedModels.forEach(m => {
+        if (!modelsToTry.includes(m)) {
+          modelsToTry.push(m);
+        }
+      });
+    }
 
     let lastError = null;
     const attemptedModels = [];
@@ -560,80 +570,119 @@ const App = {
       });
     }
 
-    const generationConfig = {
-      temperature: temperature
-    };
-    if (isJson) {
-      generationConfig.responseMimeType = 'application/json';
-    }
-
     for (const modelName of modelsToTry) {
       attemptedModels.push(modelName);
-      try {
-        const response = await fetch(
-          `https://generativelanguage.googleapis.com/v1beta/models/${modelName}:generateContent?key=${this.state.apiKey}`,
-          {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-              contents: [{ parts }],
-              generationConfig: generationConfig
-            })
+
+      // 高速化の要：Gemini 2.5系等の思考（Thinking）モードを無効化し、思考待機時間をゼロにして即時応答させる
+      const tryPayloads = [
+        // パターンA: thinkingBudget = 0 で超高速生成（Gemini 2.5 Flash / 2.5 Pro等）
+        {
+          contents: [{ parts }],
+          generationConfig: {
+            temperature: temperature,
+            ...(isJson ? { responseMimeType: 'application/json' } : {}),
+            thinkingConfig: {
+              thinkingBudget: 0
+            }
           }
-        );
+        },
+        // パターンB: thinkingConfig非対応モデル（Gemini 2.0 / 1.5等）用のフォールバック
+        {
+          contents: [{ parts }],
+          generationConfig: {
+            temperature: temperature,
+            ...(isJson ? { responseMimeType: 'application/json' } : {})
+          }
+        }
+      ];
 
-        const resText = await response.text();
+      for (let pIdx = 0; pIdx < tryPayloads.length; pIdx++) {
+        const payload = tryPayloads[pIdx];
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), 15000); // 15秒タイムアウト
 
-        if (!response.ok) {
-          let msg = `HTTPエラー ${response.status}`;
+        try {
+          const response = await fetch(
+            `https://generativelanguage.googleapis.com/v1beta/models/${modelName}:generateContent?key=${this.state.apiKey}`,
+            {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify(payload),
+              signal: controller.signal
+            }
+          );
+          clearTimeout(timeoutId);
+
+          const resText = await response.text();
+
+          if (!response.ok) {
+            let msg = `HTTPエラー ${response.status}`;
+            let isThinkingConfigError = false;
+            try {
+              const errJson = JSON.parse(resText);
+              msg = errJson?.error?.message || msg;
+              if (msg.includes('thinkingConfig') || msg.includes('thinking_budget') || msg.includes('Unknown field')) {
+                isThinkingConfigError = true;
+              }
+            } catch (e) {}
+
+            // thinkingConfigが未対応でエラーになった場合は、直ちにパターンB（thinkingConfigなし）で即再試行
+            if (isThinkingConfigError && pIdx === 0) {
+              console.log(`モデル [${modelName}] はthinkingConfig非対応のため、標準設定で再試行します...`);
+              continue;
+            }
+
+            console.warn(`Geminiモデル [${modelName}] 利用不可 (${msg})。フォールバックを試みます...`);
+            lastError = new Error(`モデル [${modelName}]: ${msg}`);
+            break; // 次のモデルへ
+          }
+
+          let data;
           try {
-            const errJson = JSON.parse(resText);
-            msg = errJson?.error?.message || msg;
-          } catch (e) {}
+            data = JSON.parse(resText);
+          } catch (e) {
+            console.warn(`モデル [${modelName}] レスポンスJSONパース失敗。フォールバックを試みます...`);
+            lastError = new Error(`モデル [${modelName}] レスポンス形式エラー`);
+            break;
+          }
 
-          console.warn(`Geminiモデル [${modelName}] 利用不可 (${msg})。フォールバックを試みます...`);
-          lastError = new Error(`モデル [${modelName}]: ${msg}`);
-          continue;
+          const text = data.candidates?.[0]?.content?.parts?.[0]?.text;
+          if (!text) {
+            console.warn(`モデル [${modelName}] からテキスト取得失敗。フォールバックを試みます...`);
+            lastError = new Error(`モデル [${modelName}]: テキスト取得失敗`);
+            break;
+          }
+
+          // 成功したモデルを記録・キャッシュして次回以降直行させる
+          if (this.state.lastWorkingModel !== modelName) {
+            this.state.lastWorkingModel = modelName;
+            this.saveToStorage().catch(() => {});
+          }
+
+          if (!isJson) {
+            return text.trim();
+          }
+
+          // マークダウン装飾（```json ... ```）の除去とJSON抽出
+          let cleanText = text.trim();
+          cleanText = cleanText.replace(/^```json\s*/i, '').replace(/^```\s*/, '').replace(/\s*```$/, '');
+          const jsonMatch = cleanText.match(/\{[\s\S]*\}/);
+          const jsonStr = jsonMatch ? jsonMatch[0] : cleanText;
+
+          try {
+            return JSON.parse(jsonStr);
+          } catch (parseErr) {
+            console.warn(`モデル [${modelName}] JSON構文解析失敗:`, parseErr);
+            lastError = new Error(`モデル [${modelName}]: JSON構文解析失敗`);
+            break;
+          }
+
+        } catch (err) {
+          clearTimeout(timeoutId);
+          console.warn(`モデル [${modelName}] 呼び出し例外:`, err.name === 'AbortError' ? 'タイムアウト(15秒)' : err.message);
+          lastError = err;
+          break; // 次のモデルへ
         }
-
-        let data;
-        try {
-          data = JSON.parse(resText);
-        } catch (e) {
-          console.warn(`モデル [${modelName}] レスポンスJSONパース失敗。フォールバックを試みます...`);
-          lastError = new Error(`モデル [${modelName}] レスポンス形式エラー`);
-          continue;
-        }
-
-        const text = data.candidates?.[0]?.content?.parts?.[0]?.text;
-        if (!text) {
-          console.warn(`モデル [${modelName}] からテキスト取得失敗。フォールバックを試みます...`);
-          lastError = new Error(`モデル [${modelName}]: テキスト取得失敗`);
-          continue;
-        }
-
-        if (!isJson) {
-          return text.trim();
-        }
-
-        // マークダウン装飾（```json ... ```）の除去とJSON抽出
-        let cleanText = text.trim();
-        cleanText = cleanText.replace(/^```json\s*/i, '').replace(/^```\s*/, '').replace(/\s*```$/, '');
-        const jsonMatch = cleanText.match(/\{[\s\S]*\}/);
-        const jsonStr = jsonMatch ? jsonMatch[0] : cleanText;
-
-        try {
-          return JSON.parse(jsonStr);
-        } catch (parseErr) {
-          console.warn(`モデル [${modelName}] JSON構文解析失敗:`, parseErr);
-          lastError = new Error(`モデル [${modelName}]: JSON構文解析失敗`);
-          continue;
-        }
-
-      } catch (err) {
-        console.warn(`モデル [${modelName}] 呼び出し例外:`, err.message);
-        lastError = err;
-        continue;
       }
     }
 
@@ -2371,9 +2420,15 @@ ${mealsSummaryText}
     const modelSelect = document.getElementById('api-model-select');
     if (modelSelect) {
       this.state.selectedModel = modelSelect.value || 'auto';
+      if (this.state.selectedModel !== 'auto') {
+        this.state.lastWorkingModel = this.state.selectedModel;
+      }
     }
     this.state.apiKey = key;
     this._cachedModels = null; // キャッシュクリア
+    // バックグラウンドで非同期にモデル一覧を事前フェッチ
+    this.getAvailableModels(key, true).catch(() => {});
+
     await this.saveToStorage();
     this.closeApiModal();
     const keyStatus = document.getElementById('key-status');

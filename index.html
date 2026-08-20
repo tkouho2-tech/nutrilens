@@ -8,7 +8,7 @@
   <meta http-equiv="Expires" content="0">
   <title>NutriLens — AI食事栄養分析アプリ</title>
   <meta name="description" content="食事の写真を撮るだけでAIがカロリーや栄養素を自動分析。毎日の健康管理をスマートにサポートします。">
-  <link rel="stylesheet" href="style.css?v=1.0.27">
+  <link rel="stylesheet" href="style.css?v=1.0.28">
 </head>
 <body>
 
@@ -22,7 +22,7 @@
       <div>
         <div style="display: flex; align-items: center; gap: 8px;">
           <div class="logo-text">NutriLens</div>
-          <span class="app-version-badge" id="app-version">v1.0.27</span>
+          <span class="app-version-badge" id="app-version">v1.0.28</span>
         </div>
         <div class="logo-subtitle">AI栄養分析</div>
       </div>
@@ -79,12 +79,12 @@
     <div id="loading-section">
       <div class="glass-card loading-card">
         <div class="loading-spinner"></div>
-        <div class="loading-text">AIが料理を分析中...</div>
+        <div class="loading-text" id="loading-main-text">AIが料理を高速分析中...</div>
         <div class="loading-dots">
           <span></span><span></span><span></span>
         </div>
-        <div style="margin-top:16px;font-size:12px;color:var(--text-muted)">
-          カロリー・栄養素を計算しています
+        <div id="loading-sub-text" style="margin-top:16px;font-size:12px;color:var(--text-muted)">
+          ⚡ 思考待機なしの爆速モードで解析しています
         </div>
       </div>
     </div>
@@ -869,16 +869,19 @@
       </div>
     </div>
     <div class="form-group" style="margin-top:14px">
-      <label class="form-label" for="api-model-select">使用モデル</label>
+      <label class="form-label" for="api-model-select">使用AIモデル</label>
       <select class="form-select" id="api-model-select">
-        <option value="auto">⚡ 自動選択（推奨 / 最新・最速モデルを自動判別）</option>
-        <option value="gemini-2.5-flash">Gemini 2.5 Flash（最新・高速推奨）</option>
-        <option value="gemini-2.5-pro">Gemini 2.5 Pro（最新・最高精度）</option>
-        <option value="gemini-2.0-flash">Gemini 2.0 Flash</option>
-        <option value="gemini-2.0-flash-lite">Gemini 2.0 Flash Lite（軽量）</option>
+        <option value="auto">⚡ 自動最速モード（推奨 / 最適・最速モデルを自動選択）</option>
+        <option value="gemini-2.5-flash">⚡ Gemini 2.5 Flash（超高速・高精度）</option>
+        <option value="gemini-2.0-flash">⚡ Gemini 2.0 Flash（高速安定）</option>
+        <option value="gemini-2.0-flash-lite">⚡ Gemini 2.0 Flash Lite（超軽量・爆速）</option>
+        <option value="gemini-2.5-pro">💎 Gemini 2.5 Pro（高精度重視）</option>
         <option value="gemini-1.5-flash">Gemini 1.5 Flash</option>
         <option value="gemini-1.5-pro">Gemini 1.5 Pro</option>
       </select>
+      <div style="font-size:11px;color:var(--text-muted);margin-top:6px;line-height:1.4">
+        ※ 思考（Thinking）を最適化し、iPhoneやモバイル回線でも1〜2秒台の超高速分析を行います。
+      </div>
     </div>
     <div class="modal-actions">
       <button class="btn btn-primary" id="btn-save-api" style="flex:1">保存する</button>
@@ -890,6 +893,6 @@
 <!-- ===== Toast Container ===== -->
 <div class="toast-container" id="toast-container"></div>
 
-<script src="app.js?v=1.0.27"></script>
+<script src="app.js?v=1.0.28"></script>
 </body>
 </html>
