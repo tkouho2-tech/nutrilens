@@ -22,13 +22,14 @@
       <div>
         <div style="display: flex; align-items: center; gap: 8px;">
           <div class="logo-text">NutriLens</div>
-          <span class="app-version-badge" id="app-version">v1.0.31</span>
+          <span class="app-version-badge" id="app-version">v1.0.32</span>
         </div>
         <div class="logo-subtitle">AI栄養分析</div>
       </div>
     </div>
     <div class="header-actions">
       <button class="btn btn-ghost btn-icon" id="btn-go-home" title="ホームに戻る" onclick="App.resetCapture(); App.switchTab('capture')">🏠</button>
+      <button class="btn btn-ghost btn-icon" id="btn-help" title="使い方・ヘルプ" onclick="App.openHelpModal()">❓</button>
       <span id="key-status" class="badge badge-warning" style="font-size:11px">APIキー未設定</span>
       <button class="btn btn-ghost btn-icon" id="btn-api-settings" title="API設定">⚙️</button>
     </div>
@@ -1124,9 +1125,95 @@
   </div>
 </div>
 
+<!-- ===== Help & AI Assistant Modal ===== -->
+<div class="modal-overlay" id="help-modal" role="dialog" aria-modal="true" onclick="if(event.target===this)App.closeHelpModal()">
+  <div class="modal" style="max-width:500px; display:flex; flex-direction:column; max-height:90vh; overflow:hidden; padding:0;">
+    
+    <div style="display:flex; justify-content:space-between; align-items:center; padding:16px 20px; border-bottom:1px solid var(--glass-border); background:rgba(255,255,255,0.03);">
+      <div style="font-size:16px; font-weight:700; color:var(--text-primary); display:flex; align-items:center; gap:8px;">
+        <span>❓</span> アプリの使い方・ヘルプ
+      </div>
+      <button class="btn-close" onclick="App.closeHelpModal()">×</button>
+    </div>
+
+    <div style="overflow-y:auto; flex:1; padding:20px;">
+      
+      <!-- Accordion Manual -->
+      <div class="help-section-title" style="font-size:13px; color:var(--text-muted); font-weight:700; margin-bottom:12px; text-transform:uppercase; letter-spacing:1px;">基本マニュアル</div>
+      
+      <div class="accordion">
+        <div class="accordion-item">
+          <div class="accordion-header" onclick="App.toggleAccordion(this)">
+            <span>📸 写真から食事を分析するには？</span>
+            <span class="accordion-arrow">▼</span>
+          </div>
+          <div class="accordion-body">
+            ホーム画面の「写真で分析」タブから、カメラで撮影するか画像を選択してください。<br>
+            プレビュー画面で「AIで栄養を分析する」を押すと、数秒で料理名・カロリー・PFCバランスが自動計算されます。
+          </div>
+        </div>
+
+        <div class="accordion-item">
+          <div class="accordion-header" onclick="App.toggleAccordion(this)">
+            <span>✍️ 間食や飲み物を手入力するには？</span>
+            <span class="accordion-arrow">▼</span>
+          </div>
+          <div class="accordion-body">
+            ホーム画面の「テキスト・間食を手入力」タブを開きます。<br>
+            「豆乳1杯」「バナナ1本」などと入力して分析ボタンを押すと、写真がなくてもAIがカロリーを計算してくれます。<br>
+            「➕ 追加」ボタンから、よく食べる間食をショートカットとして登録しておくことも可能です。
+          </div>
+        </div>
+
+        <div class="accordion-item">
+          <div class="accordion-header" onclick="App.toggleAccordion(this)">
+            <span>✏️ 分析結果が間違っていたら？</span>
+            <span class="accordion-arrow">▼</span>
+          </div>
+          <div class="accordion-body">
+            結果画面や履歴の詳細にある「✏️ 訂正・再分析」ボタンを押してください。<br>
+            「バニラシェイクです」「ご飯少なめです」と指示するだけで、AIが写真をもう一度見て正確な内容に再計算します。<br>
+            また「📝 修正」タブからカロリーなどの数値を直接編集することもできます。
+          </div>
+        </div>
+
+        <div class="accordion-item">
+          <div class="accordion-header" onclick="App.toggleAccordion(this)">
+            <span>🎯 1日の目標カロリーを変えたい</span>
+            <span class="accordion-arrow">▼</span>
+          </div>
+          <div class="accordion-body">
+            「⚙️ 設定」タブを開き、あなたの体重・活動レベル・目標体重を入力して「目標を適用して保存する」を押すと、あなたにぴったりの目標カロリー・PFCが自動設定されます。
+          </div>
+        </div>
+      </div>
+
+      <!-- Help AI Chat -->
+      <div class="help-section-title" style="font-size:13px; color:var(--text-muted); font-weight:700; margin-top:24px; margin-bottom:12px; text-transform:uppercase; letter-spacing:1px;">操作方法をAIに質問する</div>
+      
+      <div class="help-chat-container">
+        <div class="help-chat-messages" id="help-chat-messages">
+          <div class="help-msg ai">
+            <div class="help-msg-avatar">🤖</div>
+            <div class="help-msg-bubble">
+              アプリの使い方で分からないことがあれば質問してください！<br>例: 「記録を削除するには？」「AI相談って何？」
+            </div>
+          </div>
+        </div>
+        
+        <div class="help-chat-input-area" style="display:flex; gap:8px; margin-top:12px;">
+          <input type="text" id="help-chat-input" class="form-input" placeholder="使い方を質問する..." onkeypress="if(event.key==='Enter')App.sendHelpQuestion()">
+          <button class="btn btn-primary" onclick="App.sendHelpQuestion()" style="padding:0 14px;">送信</button>
+        </div>
+      </div>
+      
+    </div>
+  </div>
+</div>
+
 <!-- ===== Toast Container ===== -->
 <div class="toast-container" id="toast-container"></div>
 
-<script src="app.js?v=1.0.31"></script>
+<script src="app.js?v=1.0.32"></script>
 </body>
 </html>

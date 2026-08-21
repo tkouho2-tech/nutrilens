@@ -2,7 +2,7 @@
 
 const App = {
   // Version
-  version: 'v1.0.31',
+  version: 'v1.0.32',
 
   // Default snack quick chips
   defaultSnackChips: [
@@ -2157,6 +2157,102 @@ aiCommentには、訂正された料理（${uName || 'ユーザー'}さんの目
   closeLightbox() {
     const modal = document.getElementById('lightbox-modal');
     if (modal) modal.classList.remove('active');
+  },
+
+  // ===== Help Modal & AI Assistant =====
+  openHelpModal() {
+    const modal = document.getElementById('help-modal');
+    if (modal) modal.classList.add('active');
+  },
+
+  closeHelpModal() {
+    const modal = document.getElementById('help-modal');
+    if (modal) modal.classList.remove('active');
+  },
+
+  toggleAccordion(headerEl) {
+    const item = headerEl.parentElement;
+    item.classList.toggle('active');
+  },
+
+  async sendHelpQuestion() {
+    const inputEl = document.getElementById('help-chat-input');
+    if (!inputEl) return;
+    const msg = inputEl.value.trim();
+    if (!msg) return;
+
+    // ユーザー発言追加
+    this._addHelpMessage('user', msg);
+    inputEl.value = '';
+
+    // ロード表示
+    const typingId = this._addHelpMessage('ai', '入力中...');
+
+    try {
+      if (!this.state.apiKey) {
+        throw new Error('APIキーが設定されていません。ヘッダーの「⚙️ API設定」から設定してください。');
+      }
+      
+      const prompt = `あなたは「NutriLens(ニュートリレンズ)」というAI食事栄養分析アプリのサポートアシスタントです。ユーザーからのアプリの使い方に関する質問に答えてください。
+【NutriLensの主な機能・仕様】
+- ホーム画面は「📸 写真で分析」と「✍️ テキスト・間食を手入力」の2つのタブがある。
+- 写真で分析: 料理の写真を撮るか選んで「AIで栄養を分析する」を押すと、料理名・カロリー・PFCバランスを即座に計算する。
+- テキスト手入力: 写真がない場合「豆乳1杯」「バナナ1本」のように文字で入力してAIにカロリー計算させることができる。「➕ 追加」ボタンからよく食べる間食を登録しワンタップ入力も可能。
+- 訂正機能: 分析結果の料理名や量が違う場合、「✏️ 訂正・再分析」を押し「ご飯少なめです」と指示するだけでAIが再計算する。「📝 修正」から数値を直接書き換えることも可能。
+- 設定・目標: 「⚙️ 設定」タブで体重・血圧・活動レベルを入れると目標カロリーやPFCが自動設定され、日々の分析に反映される。
+- ヘッダー右上の「🏠」ボタンでいつでも最初のホーム画面に戻れる。
+- 記録の削除: 「履歴」タブから各食事記録のゴミ箱アイコンをタップすると削除できる。
+
+ユーザーの質問: ${msg}`;
+
+      const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${this.state.selectedModel}:generateContent?key=${this.state.apiKey}`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          contents: [{ role: 'user', parts: [{ text: prompt }] }],
+          systemInstruction: { role: 'user', parts: [{ text: 'ユーザーが質問した機能の操作方法を端的で分かりやすく、親切なトーンで回答してください。JSONではなく通常のテキストで出力してください。' }] }
+        })
+      });
+
+      if (!response.ok) {
+        throw new Error(`API Error: ${response.status}`);
+      }
+      const data = await response.json();
+      let reply = data.candidates?.[0]?.content?.parts?.[0]?.text || '';
+      this._updateHelpMessage(typingId, reply || 'すみません、うまく回答できませんでした。');
+
+    } catch (e) {
+      console.error(e);
+      this._updateHelpMessage(typingId, 'エラーが発生しました: ' + e.message);
+    }
+  },
+
+  _addHelpMessage(role, text) {
+    const container = document.getElementById('help-chat-messages');
+    if (!container) return;
+    const msgId = 'help-msg-' + Date.now() + Math.floor(Math.random() * 1000);
+    const div = document.createElement('div');
+    div.className = `help-msg ${role}`;
+    div.id = msgId;
+    
+    if (role === 'ai') {
+      div.innerHTML = `<div class="help-msg-avatar">🤖</div><div class="help-msg-bubble">${text}</div>`;
+    } else {
+      div.innerHTML = `<div class="help-msg-bubble">${text}</div>`;
+    }
+    
+    container.appendChild(div);
+    container.scrollTop = container.scrollHeight;
+    return msgId;
+  },
+
+  _updateHelpMessage(msgId, newText) {
+    const el = document.getElementById(msgId);
+    if (!el) return;
+    const bubble = el.querySelector('.help-msg-bubble');
+    if (bubble) bubble.innerHTML = newText.replace(/\n/g, '<br>');
+    const container = document.getElementById('help-chat-messages');
+    if (container) container.scrollTop = container.scrollHeight;
   },
 
   // ===== Meal Correction & Manual Edit =====
