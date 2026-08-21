@@ -2,7 +2,7 @@
 
 const App = {
   // Version
-  version: 'v1.0.32',
+  version: 'v1.0.33',
 
   // Default snack quick chips
   defaultSnackChips: [
@@ -2175,6 +2175,77 @@ aiCommentには、訂正された料理（${uName || 'ユーザー'}さんの目
     item.classList.toggle('active');
   },
 
+  // ===== Web Speech API (音声読み上げ・音声入力) =====
+  speak(text) {
+    if (!('speechSynthesis' in window)) {
+      this.showToast('お使いのブラウザは音声読み上げに対応していません。', 'error');
+      return;
+    }
+    // 既存の読み上げがあればキャンセル
+    window.speechSynthesis.cancel();
+    
+    // 絵文字を除去する（読み上げが不自然になるため）
+    const cleanText = text.replace(/[\u1000-\uFFFF]/g, '');
+
+    const utterance = new SpeechSynthesisUtterance(cleanText);
+    utterance.lang = 'ja-JP';
+    utterance.rate = 1.0;
+    utterance.pitch = 1.0;
+    
+    window.speechSynthesis.speak(utterance);
+  },
+
+  toggleSpeechForHelp() {
+    const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+    if (!SpeechRecognition) {
+      this.showToast('お使いのブラウザは音声入力に対応していません。', 'error');
+      return;
+    }
+
+    const btn = document.getElementById('btn-mic-help');
+    const input = document.getElementById('help-chat-input');
+    if (!btn || !input) return;
+
+    if (this._helpRecognition) {
+      this._helpRecognition.stop();
+      return;
+    }
+
+    const recognition = new SpeechRecognition();
+    recognition.lang = 'ja-JP';
+    recognition.interimResults = false;
+    recognition.continuous = false;
+
+    recognition.onstart = () => {
+      btn.classList.add('recording');
+      this.showToast('音声入力開始: 話しかけてください', 'success');
+    };
+
+    recognition.onresult = (e) => {
+      const transcript = e.results[0][0].transcript;
+      input.value = transcript;
+    };
+
+    recognition.onerror = (e) => {
+      console.error('Speech recognition error:', e.error);
+      if (e.error !== 'aborted') {
+        this.showToast('音声認識エラー: ' + e.error, 'error');
+      }
+    };
+
+    recognition.onend = () => {
+      btn.classList.remove('recording');
+      this._helpRecognition = null;
+      // 入力されていれば自動で送信する
+      if (input.value.trim() !== '') {
+        this.sendHelpQuestion();
+      }
+    };
+
+    this._helpRecognition = recognition;
+    recognition.start();
+  },
+
   async sendHelpQuestion() {
     const inputEl = document.getElementById('help-chat-input');
     if (!inputEl) return;
@@ -2250,7 +2321,11 @@ aiCommentには、訂正された料理（${uName || 'ユーザー'}さんの目
     const el = document.getElementById(msgId);
     if (!el) return;
     const bubble = el.querySelector('.help-msg-bubble');
-    if (bubble) bubble.innerHTML = newText.replace(/\n/g, '<br>');
+    if (bubble) {
+      const escapedText = newText.replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/\n/g, '<br>');
+      // エスケープした文字列と、読み上げ用のボタンを追加
+      bubble.innerHTML = escapedText + `<br><button class="btn btn-ghost" style="margin-top:8px; padding:4px 8px; font-size:12px;" onclick="App.speak(this.parentElement.innerText.replace('🔊 読み上げ', ''))">🔊 読み上げ</button>`;
+    }
     const container = document.getElementById('help-chat-messages');
     if (container) container.scrollTop = container.scrollHeight;
   },

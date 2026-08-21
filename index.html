@@ -22,7 +22,7 @@
       <div>
         <div style="display: flex; align-items: center; gap: 8px;">
           <div class="logo-text">NutriLens</div>
-          <span class="app-version-badge" id="app-version">v1.0.32</span>
+          <span class="app-version-badge" id="app-version">v1.0.33</span>
         </div>
         <div class="logo-subtitle">AI栄養分析</div>
       </div>
@@ -1144,12 +1144,37 @@
       <div class="accordion">
         <div class="accordion-item">
           <div class="accordion-header" onclick="App.toggleAccordion(this)">
+            <span>📱 画面のボタン・アイコンの見方</span>
+            <span class="accordion-arrow">▼</span>
+          </div>
+          <div class="accordion-body">
+            <div style="margin-bottom:8px;">
+              <strong>【画面上部のアイコン】</strong><br>
+              ・<strong>🏠 ホーム</strong>: どの画面にいても、タップするとすぐに最初の撮影・入力画面に戻ります。<br>
+              ・<strong>❓ ヘルプ</strong>: 今開いているこの画面（使い方やAIへの質問）を開きます。<br>
+              ・<strong>⚙️ API設定</strong>: アプリのAI機能を使うためのGemini APIキーを設定・変更します。
+            </div>
+            <div>
+              <strong>【画面下部のメニュー】</strong><br>
+              ・<strong>📸 撮影</strong>: メインとなる「写真で分析」や「間食の手入力」を行う画面です。<br>
+              ・<strong>📊 今日</strong>: 1日の総摂取カロリーやPFCバランスをグラフで確認できます。<br>
+              ・<strong>💬 相談</strong>: あなたの専属の管理栄養士AIに対して、健康や食事内容について自由に相談・質問ができます。<br>
+              ・<strong>🗂️ 履歴</strong>: 過去に記録した食事の一覧を見たり、修正・削除（ゴミ箱アイコン）を行えます。<br>
+              ・<strong>⚙️ 設定</strong>: 目標体重や血圧などを設定することで、あなたに最適な目標カロリーが自動計算されます。
+            </div>
+            <button class="btn btn-ghost" style="margin-top:8px; padding:4px 8px; font-size:12px;" onclick="App.speak(this.previousElementSibling.innerText + this.previousElementSibling.previousElementSibling.innerText)">🔊 読み上げ</button>
+          </div>
+        </div>
+
+        <div class="accordion-item">
+          <div class="accordion-header" onclick="App.toggleAccordion(this)">
             <span>📸 写真から食事を分析するには？</span>
             <span class="accordion-arrow">▼</span>
           </div>
           <div class="accordion-body">
             ホーム画面の「写真で分析」タブから、カメラで撮影するか画像を選択してください。<br>
-            プレビュー画面で「AIで栄養を分析する」を押すと、数秒で料理名・カロリー・PFCバランスが自動計算されます。
+            プレビュー画面で「AIで栄養を分析する」を押すと、数秒で料理名・カロリー・PFCバランスが自動計算されます。<br>
+            <button class="btn btn-ghost" style="margin-top:8px; padding:4px 8px; font-size:12px;" onclick="App.speak(this.parentElement.innerText.replace('🔊 読み上げ', ''))">🔊 読み上げ</button>
           </div>
         </div>
 
@@ -1161,7 +1186,8 @@
           <div class="accordion-body">
             ホーム画面の「テキスト・間食を手入力」タブを開きます。<br>
             「豆乳1杯」「バナナ1本」などと入力して分析ボタンを押すと、写真がなくてもAIがカロリーを計算してくれます。<br>
-            「➕ 追加」ボタンから、よく食べる間食をショートカットとして登録しておくことも可能です。
+            「➕ 追加」ボタンから、よく食べる間食をショートカットとして登録しておくことも可能です。<br>
+            <button class="btn btn-ghost" style="margin-top:8px; padding:4px 8px; font-size:12px;" onclick="App.speak(this.parentElement.innerText.replace('🔊 読み上げ', ''))">🔊 読み上げ</button>
           </div>
         </div>
 
@@ -1173,7 +1199,8 @@
           <div class="accordion-body">
             結果画面や履歴の詳細にある「✏️ 訂正・再分析」ボタンを押してください。<br>
             「バニラシェイクです」「ご飯少なめです」と指示するだけで、AIが写真をもう一度見て正確な内容に再計算します。<br>
-            また「📝 修正」タブからカロリーなどの数値を直接編集することもできます。
+            また「📝 修正」タブからカロリーなどの数値を直接編集することもできます。<br>
+            <button class="btn btn-ghost" style="margin-top:8px; padding:4px 8px; font-size:12px;" onclick="App.speak(this.parentElement.innerText.replace('🔊 読み上げ', ''))">🔊 読み上げ</button>
           </div>
         </div>
 
@@ -1183,7 +1210,8 @@
             <span class="accordion-arrow">▼</span>
           </div>
           <div class="accordion-body">
-            「⚙️ 設定」タブを開き、あなたの体重・活動レベル・目標体重を入力して「目標を適用して保存する」を押すと、あなたにぴったりの目標カロリー・PFCが自動設定されます。
+            「⚙️ 設定」タブを開き、あなたの体重・活動レベル・目標体重を入力して「目標を適用して保存する」を押すと、あなたにぴったりの目標カロリー・PFCが自動設定されます。<br>
+            <button class="btn btn-ghost" style="margin-top:8px; padding:4px 8px; font-size:12px;" onclick="App.speak(this.parentElement.innerText.replace('🔊 読み上げ', ''))">🔊 読み上げ</button>
           </div>
         </div>
       </div>
@@ -1201,8 +1229,9 @@
           </div>
         </div>
         
-        <div class="help-chat-input-area" style="display:flex; gap:8px; margin-top:12px;">
-          <input type="text" id="help-chat-input" class="form-input" placeholder="使い方を質問する..." onkeypress="if(event.key==='Enter')App.sendHelpQuestion()">
+        <div class="help-chat-input-area" style="display:flex; gap:8px; margin-top:12px; position:relative;">
+          <input type="text" id="help-chat-input" class="form-input" style="padding-right:40px;" placeholder="使い方を質問する..." onkeypress="if(event.key==='Enter')App.sendHelpQuestion()">
+          <button class="btn-mic-inside" id="btn-mic-help" title="音声で入力" onclick="App.toggleSpeechForHelp()" style="position:absolute; right:74px; top:50%; transform:translateY(-50%); width:32px; height:32px; font-size:16px;">🎙️</button>
           <button class="btn btn-primary" onclick="App.sendHelpQuestion()" style="padding:0 14px;">送信</button>
         </div>
       </div>
@@ -1214,6 +1243,6 @@
 <!-- ===== Toast Container ===== -->
 <div class="toast-container" id="toast-container"></div>
 
-<script src="app.js?v=1.0.32"></script>
+<script src="app.js?v=1.0.33"></script>
 </body>
 </html>
