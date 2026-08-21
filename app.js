@@ -2,11 +2,12 @@
 
 const App = {
   // Version
-  version: 'v1.0.28',
+  version: 'v1.0.29',
 
   // State
   state: {
     currentTab: 'capture',
+    captureMode: 'photo', // 'photo' | 'text'
     apiKey: '',
     selectedModel: 'auto',
     lastWorkingModel: null,
@@ -411,9 +412,130 @@ const App = {
     });
   },
 
+  switchCaptureMode(mode) {
+    this.state.captureMode = mode;
+    const tabPhoto = document.getElementById('mode-tab-photo');
+    const tabText = document.getElementById('mode-tab-text');
+    const uploadSection = document.getElementById('upload-section');
+    const textInputSection = document.getElementById('text-input-section');
+    const previewSection = document.getElementById('preview-section');
+    const resultSection = document.getElementById('result-section');
+    const loadingSection = document.getElementById('loading-section');
+
+    if (mode === 'photo') {
+      if (tabPhoto) {
+        tabPhoto.classList.add('active');
+        tabPhoto.setAttribute('aria-selected', 'true');
+      }
+      if (tabText) {
+        tabText.classList.remove('active');
+        tabText.setAttribute('aria-selected', 'false');
+      }
+      if (textInputSection) textInputSection.style.display = 'none';
+      if (this.state.imageBase64 && previewSection && previewSection.style.display === 'block') {
+        // keep preview
+      } else if (resultSection && resultSection.style.display === 'block') {
+        // keep result
+      } else {
+        if (uploadSection) uploadSection.style.display = 'block';
+      }
+    } else {
+      if (tabText) {
+        tabText.classList.add('active');
+        tabText.setAttribute('aria-selected', 'true');
+      }
+      if (tabPhoto) {
+        tabPhoto.classList.remove('active');
+        tabPhoto.setAttribute('aria-selected', 'false');
+      }
+      if (uploadSection) uploadSection.style.display = 'none';
+      if (previewSection) previewSection.style.display = 'none';
+      if (resultSection && resultSection.style.display === 'block') {
+        // keep result
+      } else {
+        if (textInputSection) textInputSection.style.display = 'block';
+      }
+    }
+  },
+
+  appendQuickChip(text) {
+    const textarea = document.getElementById('text-meal-input');
+    if (!textarea) return;
+    const curVal = textarea.value.trim();
+    if (!curVal) {
+      textarea.value = text;
+    } else {
+      textarea.value = `${curVal}、${text}`;
+    }
+    textarea.focus();
+  },
+
+  toggleSpeechForTextInput() {
+    const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+    if (!SpeechRecognition) {
+      this.showToast('お使いのブラウザは音声認識に対応していません', 'warning');
+      return;
+    }
+
+    const micBtn = document.getElementById('btn-text-mic');
+    const textarea = document.getElementById('text-meal-input');
+
+    if (this._textInputRecogActive) {
+      if (this._textInputRecog) this._textInputRecog.stop();
+      this._textInputRecogActive = false;
+      if (micBtn) micBtn.classList.remove('recording');
+      return;
+    }
+
+    try {
+      const recognition = new SpeechRecognition();
+      recognition.lang = 'ja-JP';
+      recognition.continuous = false;
+      recognition.interimResults = false;
+
+      recognition.onstart = () => {
+        this._textInputRecogActive = true;
+        if (micBtn) micBtn.classList.add('recording');
+        this.showToast('音声認識中... 話してください', 'info');
+      };
+
+      recognition.onresult = (e) => {
+        const transcript = e.results[0][0].transcript;
+        if (transcript && textarea) {
+          const curVal = textarea.value.trim();
+          textarea.value = curVal ? `${curVal}、${transcript}` : transcript;
+          textarea.focus();
+        }
+      };
+
+      recognition.onerror = (e) => {
+        console.warn('Speech recognition error:', e);
+        this._textInputRecogActive = false;
+        if (micBtn) micBtn.classList.remove('recording');
+        if (e.error !== 'no-speech') {
+          this.showToast(`音声認識エラー: ${e.error}`, 'error');
+        }
+      };
+
+      recognition.onend = () => {
+        this._textInputRecogActive = false;
+        if (micBtn) micBtn.classList.remove('recording');
+      };
+
+      this._textInputRecog = recognition;
+      recognition.start();
+    } catch (err) {
+      console.warn('Recognition start failed:', err);
+      this._textInputRecogActive = false;
+      if (micBtn) micBtn.classList.remove('recording');
+    }
+  },
+
   showPreview(dataUrl) {
     document.getElementById('preview-image').src = dataUrl;
     document.getElementById('upload-section').style.display = 'none';
+    const textSection = document.getElementById('text-input-section');
+    if (textSection) textSection.style.display = 'none';
     document.getElementById('preview-section').style.display = 'block';
     document.getElementById('preview-section').classList.add('fade-in');
     document.getElementById('result-section').style.display = 'none';
@@ -424,15 +546,25 @@ const App = {
     this.state.imageDataUrl = null;
     this.state.imageMimeType = 'image/jpeg';
     this.state.currentResult = null;
-    document.getElementById('upload-section').style.display = 'block';
     document.getElementById('preview-section').style.display = 'none';
     document.getElementById('result-section').style.display = 'none';
     document.getElementById('loading-section').style.display = 'none';
     document.getElementById('file-input').value = '';
     document.getElementById('camera-input').value = '';
+
+    if (this.state.captureMode === 'text') {
+      const textSection = document.getElementById('text-input-section');
+      if (textSection) textSection.style.display = 'block';
+      const uploadSec = document.getElementById('upload-section');
+      if (uploadSec) uploadSec.style.display = 'none';
+    } else {
+      document.getElementById('upload-section').style.display = 'block';
+      const textSection = document.getElementById('text-input-section');
+      if (textSection) textSection.style.display = 'none';
+    }
   },
 
-  // ===== AI Analysis =====
+  // ===== AI Analysis for Photo =====
   async analyzeImage() {
     if (!this.state.imageBase64) {
       this.showToast('画像を選択してください', 'error');
@@ -451,6 +583,9 @@ const App = {
     if (subText) subText.textContent = '⚡ 思考待機なしの爆速モードで解析しています';
 
     document.getElementById('preview-section').style.display = 'none';
+    document.getElementById('upload-section').style.display = 'none';
+    const textSec = document.getElementById('text-input-section');
+    if (textSec) textSec.style.display = 'none';
     document.getElementById('loading-section').style.display = 'block';
     document.getElementById('result-section').style.display = 'none';
 
@@ -468,6 +603,60 @@ const App = {
       console.error('Analysis error:', err);
       document.getElementById('loading-section').style.display = 'none';
       document.getElementById('preview-section').style.display = 'block';
+      this.showToast(`分析エラー: ${err.message}`, 'error');
+    }
+  },
+
+  // ===== AI Analysis for Text / Snacks =====
+  async analyzeTextInput() {
+    const inputEl = document.getElementById('text-meal-input');
+    const mealText = inputEl ? inputEl.value.trim() : '';
+
+    if (!mealText) {
+      this.showToast('食べたもの・飲んだものを入力してください', 'warning');
+      if (inputEl) inputEl.focus();
+      return;
+    }
+
+    if (!this.state.apiKey) {
+      this.showToast('Gemini APIキーを設定してください', 'error');
+      this.openApiModal();
+      return;
+    }
+
+    // 画像情報はクリア
+    this.state.imageBase64 = null;
+    this.state.imageDataUrl = null;
+
+    // Show loading
+    const mainText = document.getElementById('loading-main-text');
+    const subText = document.getElementById('loading-sub-text');
+    if (mainText) mainText.textContent = 'AIが間食・食事テキストを分析中...';
+    if (subText) subText.textContent = `📝 「${mealText.slice(0, 20)}${mealText.length > 20 ? '...' : ''}」の栄養素を計算中`;
+
+    const textSec = document.getElementById('text-input-section');
+    if (textSec) textSec.style.display = 'none';
+    document.getElementById('loading-section').style.display = 'block';
+    document.getElementById('result-section').style.display = 'none';
+
+    try {
+      const result = await this.callGeminiApiForText(mealText);
+      this.state.currentResult = result;
+      this.renderResult(result);
+      document.getElementById('loading-section').style.display = 'none';
+      document.getElementById('result-section').style.display = 'block';
+      document.getElementById('result-section').classList.add('fade-in');
+
+      // 入力欄をクリア
+      if (inputEl) inputEl.value = '';
+
+      // 自動保存
+      await this.saveMeal(true);
+      this.showToast('間食・食事の栄養を分析・記録しました！', 'success');
+    } catch (err) {
+      console.error('Text analysis error:', err);
+      document.getElementById('loading-section').style.display = 'none';
+      if (textSec) textSec.style.display = 'block';
       this.showToast(`分析エラー: ${err.message}`, 'error');
     }
   },
@@ -754,6 +943,154 @@ itemsには写真に写っている個々のおかず・食材をそれぞれ列
     return await this.executeGeminiGenerate({
       prompt,
       base64Image,
+      mimeType: this.state.imageMimeType || 'image/jpeg',
+      temperature: 0.1
+    });
+  },
+
+  async callGeminiApiForText(mealText) {
+    const ub = this.state.userBody || {};
+    const uName = ub.userName ? `${ub.userName}さん` : '';
+    const curW = ub.currentWeight || 65;
+    const tarW = ub.targetWeight || 60;
+    const goalCal = this.state.goals?.calories || 1800;
+    const diff = (tarW - curW).toFixed(1);
+    const age = this.getAge(ub.birthDate);
+    const genderStr = ub.gender === 'female' ? '女性' : ub.gender === 'male' ? '男性' : '';
+    const bpStr = (ub.bloodPressureSystolic && ub.bloodPressureDiastolic)
+      ? `血圧:${ub.bloodPressureSystolic}/${ub.bloodPressureDiastolic}mmHg`
+      : '';
+    const extraInfo = [
+      uName,
+      age !== null ? `${age}歳` : '',
+      genderStr,
+      bpStr
+    ].filter(Boolean).join(', ');
+
+    let goalStr = `現在の体重: ${curW}kg, 目標体重: ${tarW}kg (${diff < 0 ? `減量 ${Math.abs(diff)}kg 目標` : diff > 0 ? `増量 ${diff}kg 目標` : '体重維持目標'}, 1日目標: ${goalCal}kcal)${extraInfo ? `, プロフィール:[${extraInfo}]` : ''}`;
+    if (ub.routineNotes) {
+      goalStr += `, 生活習慣・ルーティン・特記事項: [${ub.routineNotes}]`;
+    }
+
+    const prompt = `ユーザーが摂取した食事または間食の内容（テキスト）から栄養素を推定・分析し、以下のJSON形式で返してください。
+【入力された食事/間食内容】: 「${mealText}」
+
+ユーザーの身体・目標・生活ルーティン情報: 【${goalStr}】
+aiCommentには、このユーザー（${uName || 'ユーザー'}）の目標（${diff < 0 ? '減量' : diff > 0 ? '増量' : '維持'}）および生活ルーティンを考慮した個別アドバイスに加えて、分析した特徴的な栄養素（間食であれば血糖値への影響やエネルギー補給の観点など）が体にどのような効果や影響をもたらすかを具体的に含め、日本語3〜4文程度で記述してください。${uName ? `可能であれば文頭などで自然に「${uName}」と呼びかけてください。` : ''}
+推定値で構いません。必ずJSON形式のみで返し、説明文は不要です。
+itemsには入力された個々の品目・食材をそれぞれ列挙してください。
+
+{
+  "foodName": "食事/間食全体の名前（日本語、例: 豆乳と草加煎餅）",
+  "foodNameEn": "Food name in English",
+  "calories": 数値（全体のkcal）,
+  "servingSize": "分量の説明（例: 豆乳200ml, 煎餅1枚 約120g）",
+  "items": [
+    {
+      "name": "品目名（例：無調整豆乳）",
+      "emoji": "絵文字1文字（例: 🥛, 🍘, 🍌, 🍫, ☕ など該当するもの）",
+      "calories": 数値（kcal）,
+      "weight": "分量・重量（例: 200ml）",
+      "pfc": { "protein": 数値（g）, "fat": 数値（g）, "carbs": 数値（g）},
+      "mainNutrients": "主な栄養素の特徴（日本語1文）"
+    }
+  ],
+  "pfc": {
+    "protein": 数値（g）,
+    "fat": 数値（g）,
+    "carbs": 数値（g）
+  },
+  "nutrients": {
+    "fiber": 数値（g）,
+    "sodium": 数値（mg）,
+    "calcium": 数値（mg）,
+    "iron": 数値（mg）,
+    "vitaminC": 数値（mg）,
+    "vitaminA": 数値（μg）
+  },
+  "healthScore": 数値（1-10、健康的かどうか）,
+  "aiComment": "この食事/間食についてのアドバイスと栄養効果（日本語、3〜4文程度）"
+}`;
+
+    return await this.executeGeminiGenerate({
+      prompt,
+      base64Image: null,
+      temperature: 0.1
+    });
+  },
+
+  async callGeminiApiForCorrection({ imageBase64 = null, previousMeal = null, correctionText }) {
+    const ub = this.state.userBody || {};
+    const uName = ub.userName ? `${ub.userName}さん` : '';
+    const curW = ub.currentWeight || 65;
+    const tarW = ub.targetWeight || 60;
+    const goalCal = this.state.goals?.calories || 1800;
+    const diff = (tarW - curW).toFixed(1);
+    const age = this.getAge(ub.birthDate);
+    const genderStr = ub.gender === 'female' ? '女性' : ub.gender === 'male' ? '男性' : '';
+    const bpStr = (ub.bloodPressureSystolic && ub.bloodPressureDiastolic)
+      ? `血圧:${ub.bloodPressureSystolic}/${ub.bloodPressureDiastolic}mmHg`
+      : '';
+    const extraInfo = [
+      uName,
+      age !== null ? `${age}歳` : '',
+      genderStr,
+      bpStr
+    ].filter(Boolean).join(', ');
+
+    let goalStr = `現在の体重: ${curW}kg, 目標体重: ${tarW}kg (${diff < 0 ? `減量 ${Math.abs(diff)}kg 目標` : diff > 0 ? `増量 ${diff}kg 目標` : '体重維持目標'}, 1日目標: ${goalCal}kcal)${extraInfo ? `, プロフィール:[${extraInfo}]` : ''}`;
+    if (ub.routineNotes) {
+      goalStr += `, 生活習慣・ルーティン・特記事項: [${ub.routineNotes}]`;
+    }
+
+    const prevName = previousMeal?.foodName || '不明';
+    const prevCal = previousMeal?.calories || 0;
+
+    const prompt = `前回の分析判定は「${prevName} (約${prevCal}kcal)」でしたが、ユーザーから以下の訂正・補足指示がありました。
+【ユーザーからの訂正・指示内容】:
+「${correctionText}」
+
+${imageBase64 ? '添付された食事写真の特徴と、' : ''}このユーザーの訂正指示を最優先で正確に反映し、正しい料理名、推定カロリー、PFCバランス、各食材/おかず内訳、各種栄養素、健康スコア、AIアドバイスを再計算して、以下のJSON形式のみで返してください。
+
+ユーザーの身体・目標・生活ルーティン情報: 【${goalStr}】
+aiCommentには、訂正された料理（${uName || 'ユーザー'}さんの目標: ${diff < 0 ? '減量' : diff > 0 ? '増量' : '維持'}）に基づき、栄養的観点や健康アドバイスを日本語3〜4文程度で記述してください。${uName ? `可能であれば文頭などで自然に「${uName}」と呼びかけてください。` : ''}
+必ずJSON形式のみで返し、説明文は不要です。
+
+{
+  "foodName": "訂正を反映した正式な料理名（日本語）",
+  "foodNameEn": "Food name in English",
+  "calories": 数値（全体のkcal）,
+  "servingSize": "提供量の説明（例: 1人前 約300g）",
+  "items": [
+    {
+      "name": "おかず名/食材名",
+      "emoji": "絵文字1文字",
+      "calories": 数値（kcal）,
+      "weight": "推定重量（例: 約150g）",
+      "pfc": { "protein": 数値（g）, "fat": 数値（g）, "carbs": 数値（g）},
+      "mainNutrients": "主な栄養素の特徴（日本語1文）"
+    }
+  ],
+  "pfc": {
+    "protein": 数値（g）,
+    "fat": 数値（g）,
+    "carbs": 数値（g）
+  },
+  "nutrients": {
+    "fiber": 数値（g）,
+    "sodium": 数値（mg）,
+    "calcium": 数値（mg）,
+    "iron": 数値（mg）,
+    "vitaminC": 数値（mg）,
+    "vitaminA": 数値（μg）
+  },
+  "healthScore": 数値（1-10、健康的かどうか）,
+  "aiComment": "訂正された料理に対する個別アドバイス（日本語、3〜4文程度）"
+}`;
+
+    return await this.executeGeminiGenerate({
+      prompt,
+      base64Image: imageBase64 || null,
       mimeType: this.state.imageMimeType || 'image/jpeg',
       temperature: 0.1
     });
@@ -1472,6 +1809,27 @@ itemsには写真に写っている個々のおかず・食材をそれぞれ列
   },
 
   // ===== History =====
+  getMealEmoji(meal) {
+    if (meal.items && meal.items.length > 0 && meal.items[0].emoji) {
+      return meal.items[0].emoji;
+    }
+    const name = (meal.foodName || '').toLowerCase();
+    if (name.includes('豆乳') || name.includes('ミルク') || name.includes('牛乳')) return '🥛';
+    if (name.includes('煎餅') || name.includes('せんべい') || name.includes('おかき') || name.includes('スナック')) return '🍘';
+    if (name.includes('チョコ') || name.includes('プロテインバー') || name.includes('クッキー')) return '🍫';
+    if (name.includes('コーヒー') || name.includes('カフェラテ') || name.includes('お茶') || name.includes('ティー')) return '☕';
+    if (name.includes('シェイク') || name.includes('スムージー') || name.includes('ジュース')) return '🥤';
+    if (name.includes('バナナ')) return '🍌';
+    if (name.includes('ナッツ') || name.includes('アーモンド') || name.includes('くるみ')) return '🥜';
+    if (name.includes('卵') || name.includes('たまご')) return '🥚';
+    if (name.includes('パン') || name.includes('サンド') || name.includes('トースト')) return '🥪';
+    if (name.includes('カレー')) return '🍛';
+    if (name.includes('ラーメン') || name.includes('うどん') || name.includes('そば') || name.includes('パスタ')) return '🍜';
+    if (name.includes('サラダ')) return '🥗';
+    if (name.includes('定食') || name.includes('弁当')) return '🍱';
+    return '🍽️';
+  },
+
   renderHistory() {
     const list = document.getElementById('history-list');
     if (!list) return;
@@ -1480,7 +1838,7 @@ itemsには写真に写っている個々のおかず・食材をそれぞれ列
       list.innerHTML = `
         <div class="history-empty glass-card">
           <span class="history-empty-icon">🍽️</span>
-          まだ食事記録がありません。<br>最初の食事を撮影してみましょう！
+          まだ食事記録がありません。<br>最初の食事を撮影または手入力してみましょう！
         </div>`;
       return;
     }
@@ -1511,9 +1869,10 @@ itemsには写真に写っている個々のおかず・食材をそれぞれ列
       html += groups[dateStr].map(meal => {
         const mealDate = new Date(meal.timestamp);
         const timeStr = mealDate.toLocaleTimeString('ja-JP', { hour: '2-digit', minute: '2-digit' });
+        const emoji = this.getMealEmoji(meal);
         const thumbHtml = meal.imageDataUrl
           ? `<img src="${meal.imageDataUrl}" class="history-thumb" alt="${meal.foodName}">`
-          : `<div class="history-thumb-placeholder">🍽️</div>`;
+          : `<div class="history-thumb-placeholder">${emoji}</div>`;
 
         return `
           <div class="history-item glass-card" data-id="${meal.id}" onclick="App.openMealDetail(${meal.id})" style="cursor:pointer">
@@ -1618,6 +1977,314 @@ itemsには写真に写っている個々のおかず・食材をそれぞれ列
     }
     this.openMealDetail(targetId);
     setTimeout(() => this.toggleEditDate(true), 150);
+  },
+
+  // ===== Lightbox for Image Full View =====
+  openLightbox(src) {
+    if (!src) return;
+    const modal = document.getElementById('lightbox-modal');
+    const img = document.getElementById('lightbox-img');
+    if (!modal || !img) return;
+    img.src = src;
+    modal.classList.add('active');
+  },
+
+  closeLightbox() {
+    const modal = document.getElementById('lightbox-modal');
+    if (modal) modal.classList.remove('active');
+  },
+
+  // ===== Meal Correction & Manual Edit =====
+  _currentCorrectionMealId: null,
+
+  openCorrectionForResult() {
+    const meal = this.state.currentResult;
+    if (!meal) {
+      this.showToast('訂正対象の分析結果がありません', 'error');
+      return;
+    }
+    const targetId = this.state.latestSavedMealId || (this.state.mealHistory[0] ? this.state.mealHistory[0].id : null);
+    this.openCorrectionModal(targetId, true);
+  },
+
+  openManualEditForResult() {
+    const targetId = this.state.latestSavedMealId || (this.state.mealHistory[0] ? this.state.mealHistory[0].id : null);
+    this.openCorrectionModal(targetId, true);
+    this.switchCorrectionTab('manual');
+  },
+
+  openCorrectionForCurrentDetail() {
+    if (!this.state.currentDetailId) {
+      this.showToast('対象の食事データが見つかりません', 'error');
+      return;
+    }
+    this.openCorrectionModal(this.state.currentDetailId, false);
+  },
+
+  openManualEditForCurrentDetail() {
+    if (!this.state.currentDetailId) {
+      this.showToast('対象の食事データが見つかりません', 'error');
+      return;
+    }
+    this.openCorrectionModal(this.state.currentDetailId, false);
+    this.switchCorrectionTab('manual');
+  },
+
+  openCorrectionModal(mealId, fromResult = false) {
+    let meal = null;
+    if (mealId) {
+      meal = this.state.mealHistory.find(m => m.id === mealId);
+    }
+    if (!meal && fromResult && this.state.currentResult) {
+      meal = {
+        id: this.state.latestSavedMealId || Date.now(),
+        imageDataUrl: this.state.imageDataUrl,
+        ...this.state.currentResult
+      };
+    }
+    if (!meal) {
+      this.showToast('対象の食事データが見つかりません', 'error');
+      return;
+    }
+
+    this._currentCorrectionMealId = meal.id;
+
+    // Set UI elements
+    const nameEl = document.getElementById('correct-current-name');
+    const calEl = document.getElementById('correct-current-cal');
+    const thumbImg = document.getElementById('correct-thumb-img');
+    const thumbEmoji = document.getElementById('correct-thumb-emoji');
+
+    if (nameEl) nameEl.textContent = meal.foodName || '不明な料理';
+    if (calEl) calEl.textContent = `${meal.calories || 0} kcal`;
+
+    if (meal.imageDataUrl && thumbImg) {
+      thumbImg.src = meal.imageDataUrl;
+      thumbImg.style.display = 'block';
+      if (thumbEmoji) thumbEmoji.style.display = 'none';
+    } else {
+      if (thumbImg) thumbImg.style.display = 'none';
+      if (thumbEmoji) thumbEmoji.style.display = 'block';
+    }
+
+    // Reset AI instruction input
+    const instructionInput = document.getElementById('correct-instruction-input');
+    if (instructionInput) instructionInput.value = '';
+
+    // Set Manual Edit fields
+    const mName = document.getElementById('manual-edit-name');
+    const mCal = document.getElementById('manual-edit-calories');
+    const mHealth = document.getElementById('manual-edit-healthscore');
+    const mProt = document.getElementById('manual-edit-protein');
+    const mFat = document.getElementById('manual-edit-fat');
+    const mCarbs = document.getElementById('manual-edit-carbs');
+    const mComment = document.getElementById('manual-edit-comment');
+
+    if (mName) mName.value = meal.foodName || '';
+    if (mCal) mCal.value = meal.calories || 0;
+    if (mHealth) mHealth.value = meal.healthScore || 7;
+    if (mProt) mProt.value = meal.pfc?.protein ?? 0;
+    if (mFat) mFat.value = meal.pfc?.fat ?? 0;
+    if (mCarbs) mCarbs.value = meal.pfc?.carbs ?? 0;
+    if (mComment) mComment.value = meal.aiComment || '';
+
+    // Default to AI tab
+    this.switchCorrectionTab('ai');
+
+    const modal = document.getElementById('correct-modal');
+    if (modal) modal.classList.add('active');
+  },
+
+  closeCorrectionModal() {
+    const modal = document.getElementById('correct-modal');
+    if (modal) modal.classList.remove('active');
+  },
+
+  switchCorrectionTab(tab) {
+    const tabAi = document.getElementById('correct-tab-ai');
+    const tabManual = document.getElementById('correct-tab-manual');
+    const panelAi = document.getElementById('correct-panel-ai');
+    const panelManual = document.getElementById('correct-panel-manual');
+
+    if (tab === 'ai') {
+      if (tabAi) tabAi.classList.add('active');
+      if (tabManual) tabManual.classList.remove('active');
+      if (panelAi) panelAi.style.display = 'block';
+      if (panelManual) panelManual.style.display = 'none';
+    } else {
+      if (tabManual) tabManual.classList.add('active');
+      if (tabAi) tabAi.classList.remove('active');
+      if (panelAi) panelAi.style.display = 'none';
+      if (panelManual) panelManual.style.display = 'block';
+    }
+  },
+
+  toggleSpeechForCorrectInput() {
+    const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+    if (!SpeechRecognition) {
+      this.showToast('お使いのブラウザは音声認識に対応していません', 'warning');
+      return;
+    }
+
+    const micBtn = document.getElementById('btn-correct-mic');
+    const textarea = document.getElementById('correct-instruction-input');
+
+    if (this._correctInputRecogActive) {
+      if (this._correctInputRecog) this._correctInputRecog.stop();
+      this._correctInputRecogActive = false;
+      if (micBtn) micBtn.classList.remove('recording');
+      return;
+    }
+
+    try {
+      const recognition = new SpeechRecognition();
+      recognition.lang = 'ja-JP';
+      recognition.continuous = false;
+      recognition.interimResults = false;
+
+      recognition.onstart = () => {
+        this._correctInputRecogActive = true;
+        if (micBtn) micBtn.classList.add('recording');
+        this.showToast('音声認識中... 話してください', 'info');
+      };
+
+      recognition.onresult = (e) => {
+        const transcript = e.results[0][0].transcript;
+        if (transcript && textarea) {
+          const curVal = textarea.value.trim();
+          textarea.value = curVal ? `${curVal}、${transcript}` : transcript;
+          textarea.focus();
+        }
+      };
+
+      recognition.onerror = (e) => {
+        console.warn('Speech recognition error:', e);
+        this._correctInputRecogActive = false;
+        if (micBtn) micBtn.classList.remove('recording');
+        if (e.error !== 'no-speech') {
+          this.showToast(`音声認識エラー: ${e.error}`, 'error');
+        }
+      };
+
+      recognition.onend = () => {
+        this._correctInputRecogActive = false;
+        if (micBtn) micBtn.classList.remove('recording');
+      };
+
+      this._correctInputRecog = recognition;
+      recognition.start();
+    } catch (err) {
+      console.warn('Recognition start failed:', err);
+      this._correctInputRecogActive = false;
+      if (micBtn) micBtn.classList.remove('recording');
+    }
+  },
+
+  async submitCorrection() {
+    const inputEl = document.getElementById('correct-instruction-input');
+    const correctionText = inputEl ? inputEl.value.trim() : '';
+
+    if (!correctionText) {
+      this.showToast('実際の料理名や訂正内容を入力してください', 'warning');
+      if (inputEl) inputEl.focus();
+      return;
+    }
+
+    if (!this.state.apiKey) {
+      this.showToast('Gemini APIキーを設定してください', 'error');
+      this.openApiModal();
+      return;
+    }
+
+    const mealId = this._currentCorrectionMealId;
+    let targetMeal = this.state.mealHistory.find(m => m.id === mealId);
+
+    // ボタンをロード中に
+    const submitBtn = document.getElementById('btn-submit-correction');
+    const origText = submitBtn ? submitBtn.textContent : '';
+    if (submitBtn) {
+      submitBtn.disabled = true;
+      submitBtn.textContent = '🔄 AIが再計算中...';
+    }
+
+    try {
+      let base64 = null;
+      if (targetMeal && targetMeal.imageDataUrl) {
+        base64 = targetMeal.imageDataUrl.split(',')[1];
+      } else if (this.state.imageBase64) {
+        base64 = this.state.imageBase64;
+      }
+
+      const result = await this.callGeminiApiForCorrection({
+        imageBase64: base64,
+        previousMeal: targetMeal || this.state.currentResult,
+        correctionText
+      });
+
+      // 更新
+      if (targetMeal) {
+        Object.assign(targetMeal, result);
+        this.renderDetailModal(targetMeal);
+      }
+      this.state.currentResult = result;
+      this.renderResult(result);
+
+      await this.saveToStorage();
+      this.renderHistory();
+      this.renderDashboard();
+
+      this.closeCorrectionModal();
+      this.showToast('AIによる訂正・再計算が完了しました！', 'success');
+    } catch (err) {
+      console.error('Correction error:', err);
+      this.showToast(`再分析エラー: ${err.message}`, 'error');
+    } finally {
+      if (submitBtn) {
+        submitBtn.disabled = false;
+        submitBtn.textContent = origText;
+      }
+    }
+  },
+
+  async saveManualEdit() {
+    const mealId = this._currentCorrectionMealId;
+    let targetMeal = this.state.mealHistory.find(m => m.id === mealId);
+
+    const mName = document.getElementById('manual-edit-name')?.value.trim() || '食事';
+    const mCal = Number(document.getElementById('manual-edit-calories')?.value) || 0;
+    const mHealth = Number(document.getElementById('manual-edit-healthscore')?.value) || 7;
+    const mProt = Number(document.getElementById('manual-edit-protein')?.value) || 0;
+    const mFat = Number(document.getElementById('manual-edit-fat')?.value) || 0;
+    const mCarbs = Number(document.getElementById('manual-edit-carbs')?.value) || 0;
+    const mComment = document.getElementById('manual-edit-comment')?.value.trim() || '';
+
+    const updatedData = {
+      foodName: mName,
+      calories: mCal,
+      healthScore: mHealth,
+      pfc: {
+        protein: mProt,
+        fat: mFat,
+        carbs: mCarbs
+      },
+      aiComment: mComment
+    };
+
+    if (targetMeal) {
+      Object.assign(targetMeal, updatedData);
+      this.renderDetailModal(targetMeal);
+    }
+    if (this.state.currentResult) {
+      Object.assign(this.state.currentResult, updatedData);
+      this.renderResult(this.state.currentResult);
+    }
+
+    await this.saveToStorage();
+    this.renderHistory();
+    this.renderDashboard();
+
+    this.closeCorrectionModal();
+    this.showToast('食事記録の修正を保存しました', 'success');
   },
 
   // ===== Meal Detail Modal =====

@@ -8,7 +8,7 @@
   <meta http-equiv="Expires" content="0">
   <title>NutriLens — AI食事栄養分析アプリ</title>
   <meta name="description" content="食事の写真を撮るだけでAIがカロリーや栄養素を自動分析。毎日の健康管理をスマートにサポートします。">
-  <link rel="stylesheet" href="style.css?v=1.0.28">
+  <link rel="stylesheet" href="style.css?v=1.0.29">
 </head>
 <body>
 
@@ -22,7 +22,7 @@
       <div>
         <div style="display: flex; align-items: center; gap: 8px;">
           <div class="logo-text">NutriLens</div>
-          <span class="app-version-badge" id="app-version">v1.0.28</span>
+          <span class="app-version-badge" id="app-version">v1.0.29</span>
         </div>
         <div class="logo-subtitle">AI栄養分析</div>
       </div>
@@ -37,7 +37,19 @@
   <section id="tab-capture" class="tab-panel active">
     <h1 style="font-size:0;position:absolute">NutriLens - AI食事栄養分析</h1>
 
-    <!-- Upload Section -->
+    <!-- Mode Switcher Tabs (写真で分析 / テキストで間食・食事分析) -->
+    <div class="capture-mode-container">
+      <div class="capture-mode-tabs" role="tablist">
+        <button class="capture-mode-tab active" id="mode-tab-photo" role="tab" aria-selected="true" onclick="App.switchCaptureMode('photo')">
+          📸 写真で分析
+        </button>
+        <button class="capture-mode-tab" id="mode-tab-text" role="tab" aria-selected="false" onclick="App.switchCaptureMode('text')">
+          ✍️ テキスト・間食を手入力
+        </button>
+      </div>
+    </div>
+
+    <!-- Upload Section (Photo Mode) -->
     <div id="upload-section">
       <div class="upload-area" id="upload-area" role="button" tabindex="0" aria-label="画像をアップロードまたはドラッグ&amp;ドロップ">
         <span class="upload-icon">📸</span>
@@ -51,6 +63,47 @@
           <button class="btn btn-ghost btn-lg" id="btn-upload" style="position: relative; overflow: hidden;">
             🖼️ 画像を選択
             <input type="file" id="file-input" accept="image/*" style="position: absolute; top: 0; left: 0; width: 100%; height: 100%; opacity: 0; cursor: pointer; display: block;">
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Text Input Section (Text/Snack Mode) -->
+    <div id="text-input-section" style="display: none;">
+      <div class="glass-card text-input-card">
+        <div class="text-input-header">
+          <span class="icon">✍️</span>
+          <div>
+            <div style="font-weight: 700; font-size: 15px; color: var(--text-primary);">間食・食事内容を手入力</div>
+            <div style="font-size: 12px; color: var(--text-muted);">写真がなくてもAIがカロリー・PFC・栄養素を自動算出します</div>
+          </div>
+        </div>
+
+        <div class="text-input-wrapper">
+          <textarea id="text-meal-input" class="form-input text-meal-textarea" rows="3" placeholder="食べたもの・飲んだものを入力してください&#10;例: 豆乳コップ1杯、草加煎餅2枚、バナナ1本、カフェラテ1杯 など"></textarea>
+          <button class="btn-mic-inside" id="btn-text-mic" title="音声で入力" onclick="App.toggleSpeechForTextInput()">
+            🎙️
+          </button>
+        </div>
+
+        <!-- Quick Snack Suggestion Chips -->
+        <div class="quick-chips-section">
+          <div class="quick-chips-title">よくある間食・手軽に追加:</div>
+          <div class="quick-chips-list">
+            <button class="quick-chip" onclick="App.appendQuickChip('豆乳コップ1杯 (200ml)')">🥛 豆乳1杯</button>
+            <button class="quick-chip" onclick="App.appendQuickChip('草加煎餅 1枚')">🍘 煎餅1枚</button>
+            <button class="quick-chip" onclick="App.appendQuickChip('バナナ 1本')">🍌 バナナ1本</button>
+            <button class="quick-chip" onclick="App.appendQuickChip('チョコレート 2粒')">🍫 チョコ2粒</button>
+            <button class="quick-chip" onclick="App.appendQuickChip('ミックスナッツ 1握り(25g)')">🥜 ナッツ1袋</button>
+            <button class="quick-chip" onclick="App.appendQuickChip('アイスカフェラテ 1杯')">☕ カフェラテ</button>
+            <button class="quick-chip" onclick="App.appendQuickChip('プロテインバー 1本')">🍫 プロテインバー</button>
+            <button class="quick-chip" onclick="App.appendQuickChip('ゆで卵 1個')">🥚 ゆで卵1個</button>
+          </div>
+        </div>
+
+        <div class="text-input-actions">
+          <button class="btn btn-primary btn-lg" id="btn-analyze-text" onclick="App.analyzeTextInput()" style="width: 100%; max-width: 340px;">
+            🔍 AIで栄養を分析する
           </button>
         </div>
       </div>
@@ -179,11 +232,17 @@
 
         <!-- Actions -->
         <div class="result-actions" style="display:flex;gap:10px;flex-wrap:wrap">
-          <button class="btn btn-ghost" id="btn-result-edit-date" onclick="App.openEditDateForResult()" style="flex:1">
-            🕒 記録日時を変更
+          <button class="btn btn-warning-soft" id="btn-result-correct" onclick="App.openCorrectionForResult()" style="flex:1;min-width:140px">
+            ✏️ AIで訂正・再分析
           </button>
-          <button class="btn btn-primary" id="btn-reanalyze" style="flex:1">
-            🔄 別の写真を撮る
+          <button class="btn btn-ghost" id="btn-result-manual-edit" onclick="App.openManualEditForResult()" style="flex:1;min-width:120px">
+            📝 手動修正
+          </button>
+          <button class="btn btn-ghost" id="btn-result-edit-date" onclick="App.openEditDateForResult()" style="flex:1;min-width:130px">
+            🕒 日時変更
+          </button>
+          <button class="btn btn-primary" id="btn-reanalyze" style="flex:1;min-width:140px">
+            🔄 別の食事を記録
           </button>
         </div>
 
@@ -622,18 +681,33 @@
     <!-- Scrollable content -->
     <div class="detail-modal-body">
 
-      <!-- Food image -->
-      <div id="detail-image-wrap" style="display:none;margin-bottom:16px;border-radius:var(--radius-md);overflow:hidden;max-height:220px">
-        <img id="detail-image" src="" alt="食事の写真" style="width:100%;max-height:220px;object-fit:cover;display:block">
+      <!-- Food image (写真全体が切れないように表示 + タップ拡大) -->
+      <div id="detail-image-wrap" class="detail-image-container" style="display:none;">
+        <div class="detail-image-inner">
+          <img id="detail-image" src="" alt="食事の写真" onclick="App.openLightbox(this.src)" title="タップして拡大・全体表示">
+          <button class="image-expand-badge" onclick="App.openLightbox(document.getElementById('detail-image').src)" title="全体・拡大表示">
+            🔍 全体表示
+          </button>
+        </div>
       </div>
 
       <!-- Food info -->
       <div id="detail-food-name" style="font-size:24px;font-weight:800;background:var(--gradient-main);-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text;margin-bottom:4px"></div>
       <div id="detail-food-name-en" style="font-size:13px;color:var(--text-muted);margin-bottom:8px"></div>
-      <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin-bottom:16px">
+      
+      <!-- Badges & Action Buttons -->
+      <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-bottom:16px">
         <span id="detail-health-badge" class="badge badge-success"></span>
         <span id="detail-time" style="font-size:12px;color:var(--text-muted)"></span>
-        <button id="btn-edit-date" class="btn btn-ghost" style="padding:4px 8px; font-size:11px;" onclick="App.toggleEditDate(true)">🕒 日時を変更</button>
+        <button id="btn-detail-correct" class="btn btn-warning-soft" style="padding:4px 10px; font-size:12px;" onclick="App.openCorrectionForCurrentDetail()">
+          ✏️ 訂正・再分析
+        </button>
+        <button id="btn-detail-manual-edit" class="btn btn-ghost" style="padding:4px 8px; font-size:12px;" onclick="App.openManualEditForCurrentDetail()">
+          📝 修正
+        </button>
+        <button id="btn-edit-date" class="btn btn-ghost" style="padding:4px 8px; font-size:11px;" onclick="App.toggleEditDate(true)">
+          🕒 日時変更
+        </button>
         <div id="edit-date-container" style="display:none; align-items:center; gap:8px; width:100%; margin-top:8px; background:rgba(255,255,255,0.04); padding:10px; border-radius:var(--radius-sm); border:1px solid var(--glass-border);">
           <input type="datetime-local" id="edit-date-input" class="form-input" style="padding:6px 10px; font-size:13px; flex:1; min-width:180px;">
           <button class="btn btn-primary" style="padding:6px 14px; font-size:12px;" onclick="App.saveNewDate()">保存</button>
@@ -890,9 +964,129 @@
   </div>
 </div>
 
+<!-- ===== Meal Correction & Edit Modal ===== -->
+<div class="modal-overlay" id="correct-modal" role="dialog" aria-modal="true" aria-labelledby="correct-modal-title" onclick="if(event.target===this)App.closeCorrectionModal()">
+  <div class="modal" style="max-height:88vh; display:flex; flex-direction:column; overflow:hidden;">
+    <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:12px;">
+      <div id="correct-modal-title" class="modal-title" style="margin:0; font-size:18px;">✏️ 食事内容の訂正・編集</div>
+      <button class="btn-close" onclick="App.closeCorrectionModal()">×</button>
+    </div>
+
+    <!-- Mode Selector Tabs: AI Smart Correction vs Direct Manual Edit -->
+    <div class="capture-mode-tabs" style="margin-bottom:14px;">
+      <button class="capture-mode-tab active" id="correct-tab-ai" onclick="App.switchCorrectionTab('ai')">
+        🤖 AIで指示して再計算
+      </button>
+      <button class="capture-mode-tab" id="correct-tab-manual" onclick="App.switchCorrectionTab('manual')">
+        ⚙️ 数値を手動で編集
+      </button>
+    </div>
+
+    <div class="modal-body" style="overflow-y:auto; flex:1; padding-right:4px;">
+      
+      <!-- Panel 1: AI Smart Correction -->
+      <div id="correct-panel-ai">
+        <div class="glass-card" style="padding:12px 14px; margin-bottom:12px; display:flex; align-items:center; gap:12px; background:rgba(255,255,255,0.03);">
+          <div id="correct-thumb-wrap" style="width:54px; height:54px; border-radius:var(--radius-sm); overflow:hidden; background:var(--bg-secondary); flex-shrink:0; display:flex; align-items:center; justify-content:center;">
+            <img id="correct-thumb-img" src="" alt="" style="width:100%; height:100%; object-fit:contain; display:none;">
+            <span id="correct-thumb-emoji" style="font-size:24px;">🍱</span>
+          </div>
+          <div style="flex:1; min-width:0;">
+            <div style="font-size:11px; color:var(--text-muted);">現在の判定</div>
+            <div id="correct-current-name" style="font-size:15px; font-weight:700; color:var(--text-primary); white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">—</div>
+            <div id="correct-current-cal" style="font-size:12px; color:var(--accent-primary); font-weight:600;">— kcal</div>
+          </div>
+        </div>
+
+        <div class="form-group" style="margin-bottom:14px;">
+          <label class="form-label" for="correct-instruction-input">
+            実際の料理名や訂正内容を入力してください
+          </label>
+          <div class="text-input-wrapper">
+            <textarea
+              id="correct-instruction-input"
+              class="form-input text-meal-textarea"
+              rows="3"
+              placeholder="例: sukiyaのバニラシェイクです&#10;例: タケノコが沢山入ったグリーンカレーです&#10;例: ご飯は少なめで100g程度です"
+            ></textarea>
+            <button class="btn-mic-inside" id="btn-correct-mic" title="音声で入力" onclick="App.toggleSpeechForCorrectInput()">
+              🎙️
+            </button>
+          </div>
+          <div style="font-size:11px; color:var(--text-muted); margin-top:6px; line-height:1.4;">
+            💡 写真の特徴とあなたの訂正指示をもとに、AIが正しい料理名・カロリー・PFC・おかず内訳を再計算します。
+          </div>
+        </div>
+
+        <!-- Correction Action Button -->
+        <div style="margin-top:16px;">
+          <button class="btn btn-primary" id="btn-submit-correction" onclick="App.submitCorrection()" style="width:100%; padding:12px; font-weight:700;">
+            🔄 AIで再計算して更新する
+          </button>
+        </div>
+      </div>
+
+      <!-- Panel 2: Direct Manual Edit -->
+      <div id="correct-panel-manual" style="display:none;">
+        <div class="form-group" style="margin-bottom:12px;">
+          <label class="form-label" for="manual-edit-name">料理名</label>
+          <input type="text" class="form-input" id="manual-edit-name" placeholder="料理名（例: バニラシェイク）">
+        </div>
+
+        <div style="display:grid; grid-template-columns:1fr 1fr; gap:10px; margin-bottom:12px;">
+          <div class="form-group">
+            <label class="form-label" for="manual-edit-calories">カロリー (kcal)</label>
+            <input type="number" class="form-input" id="manual-edit-calories" placeholder="300" min="0">
+          </div>
+          <div class="form-group">
+            <label class="form-label" for="manual-edit-healthscore">健康スコア (1-10)</label>
+            <input type="number" class="form-input" id="manual-edit-healthscore" placeholder="7" min="1" max="10">
+          </div>
+        </div>
+
+        <div style="font-size:12px; font-weight:700; color:var(--text-muted); margin-bottom:6px;">PFCバランス (g)</div>
+        <div style="display:grid; grid-template-columns:1fr 1fr 1fr; gap:8px; margin-bottom:14px;">
+          <div>
+            <label style="font-size:11px; color:var(--accent-p);">タンパク質</label>
+            <input type="number" step="0.1" class="form-input" id="manual-edit-protein" placeholder="0" min="0">
+          </div>
+          <div>
+            <label style="font-size:11px; color:var(--accent-f);">脂質</label>
+            <input type="number" step="0.1" class="form-input" id="manual-edit-fat" placeholder="0" min="0">
+          </div>
+          <div>
+            <label style="font-size:11px; color:var(--accent-c);">炭水化物</label>
+            <input type="number" step="0.1" class="form-input" id="manual-edit-carbs" placeholder="0" min="0">
+          </div>
+        </div>
+
+        <div class="form-group" style="margin-bottom:14px;">
+          <label class="form-label" for="manual-edit-comment">AIコメント / メモ</label>
+          <textarea class="form-input" id="manual-edit-comment" rows="2" placeholder="食事に関するメモやコメント"></textarea>
+        </div>
+
+        <div style="margin-top:16px;">
+          <button class="btn btn-primary" onclick="App.saveManualEdit()" style="width:100%; padding:12px; font-weight:700;">
+            💾 変更を保存する
+          </button>
+        </div>
+      </div>
+
+    </div>
+  </div>
+</div>
+
+<!-- ===== Image Full View Lightbox Modal ===== -->
+<div class="lightbox-overlay" id="lightbox-modal" onclick="App.closeLightbox()">
+  <button class="lightbox-close" onclick="App.closeLightbox()" title="閉じる">✕</button>
+  <div class="lightbox-container" onclick="event.stopPropagation()">
+    <img id="lightbox-img" src="" alt="食事の写真の拡大表示">
+  </div>
+</div>
+
 <!-- ===== Toast Container ===== -->
 <div class="toast-container" id="toast-container"></div>
 
-<script src="app.js?v=1.0.28"></script>
+<script src="app.js?v=1.0.29"></script>
 </body>
 </html>
