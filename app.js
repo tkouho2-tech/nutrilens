@@ -2,7 +2,7 @@
 
 const App = {
   // Version
-  version: 'v1.0.33',
+  version: 'v1.0.34',
 
   // Default snack quick chips
   defaultSnackChips: [
@@ -2265,6 +2265,8 @@ aiCommentには、訂正された料理（${uName || 'ユーザー'}さんの目
       }
       
       const prompt = `あなたは「NutriLens(ニュートリレンズ)」というAI食事栄養分析アプリのサポートアシスタントです。ユーザーからのアプリの使い方に関する質問に答えてください。
+【指示】ユーザーが質問した機能の操作方法を端的で分かりやすく、親切なトーンで回答してください。JSONではなく通常のテキストで出力してください。
+
 【NutriLensの主な機能・仕様】
 - ホーム画面は「📸 写真で分析」と「✍️ テキスト・間食を手入力」の2つのタブがある。
 - 写真で分析: 料理の写真を撮るか選んで「AIで栄養を分析する」を押すと、料理名・カロリー・PFCバランスを即座に計算する。
@@ -2276,20 +2278,11 @@ aiCommentには、訂正された料理（${uName || 'ユーザー'}さんの目
 
 ユーザーの質問: ${msg}`;
 
-      const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${this.state.selectedModel}:generateContent?key=${this.state.apiKey}`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          contents: [{ role: 'user', parts: [{ text: prompt }] }],
-          systemInstruction: { role: 'user', parts: [{ text: 'ユーザーが質問した機能の操作方法を端的で分かりやすく、親切なトーンで回答してください。JSONではなく通常のテキストで出力してください。' }] }
-        })
+      const reply = await this.executeGeminiGenerate({
+        prompt: prompt,
+        isJson: false
       });
 
-      if (!response.ok) {
-        throw new Error(`API Error: ${response.status}`);
-      }
-      const data = await response.json();
-      let reply = data.candidates?.[0]?.content?.parts?.[0]?.text || '';
       this._updateHelpMessage(typingId, reply || 'すみません、うまく回答できませんでした。');
 
     } catch (e) {

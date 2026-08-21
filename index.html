@@ -22,7 +22,7 @@
       <div>
         <div style="display: flex; align-items: center; gap: 8px;">
           <div class="logo-text">NutriLens</div>
-          <span class="app-version-badge" id="app-version">v1.0.33</span>
+          <span class="app-version-badge" id="app-version">v1.0.34</span>
         </div>
         <div class="logo-subtitle">AI栄養分析</div>
       </div>
@@ -1229,10 +1229,10 @@
           </div>
         </div>
         
-        <div class="help-chat-input-area" style="display:flex; gap:8px; margin-top:12px; position:relative;">
-          <input type="text" id="help-chat-input" class="form-input" style="padding-right:40px;" placeholder="使い方を質問する..." onkeypress="if(event.key==='Enter')App.sendHelpQuestion()">
-          <button class="btn-mic-inside" id="btn-mic-help" title="音声で入力" onclick="App.toggleSpeechForHelp()" style="position:absolute; right:74px; top:50%; transform:translateY(-50%); width:32px; height:32px; font-size:16px;">🎙️</button>
-          <button class="btn btn-primary" onclick="App.sendHelpQuestion()" style="padding:0 14px;">送信</button>
+        <div class="help-chat-input-area" style="display:flex; gap:8px; margin-top:12px; align-items:center;">
+          <input type="text" id="help-chat-input" class="form-input" style="flex:1;" placeholder="使い方を質問する..." onkeypress="if(event.key==='Enter')App.sendHelpQuestion()">
+          <button class="btn btn-ghost" id="btn-mic-help" title="音声で入力" onclick="App.toggleSpeechForHelp()" style="padding:4px 8px; font-size:18px;">🎙️</button>
+          <button class="btn btn-primary" onclick="App.sendHelpQuestion()" style="padding:0 14px; flex-shrink:0;">送信</button>
         </div>
       </div>
       
