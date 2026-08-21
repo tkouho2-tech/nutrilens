@@ -22,12 +22,13 @@
       <div>
         <div style="display: flex; align-items: center; gap: 8px;">
           <div class="logo-text">NutriLens</div>
-          <span class="app-version-badge" id="app-version">v1.0.30</span>
+          <span class="app-version-badge" id="app-version">v1.0.31</span>
         </div>
         <div class="logo-subtitle">AI栄養分析</div>
       </div>
     </div>
     <div class="header-actions">
+      <button class="btn btn-ghost btn-icon" id="btn-go-home" title="ホームに戻る" onclick="App.resetCapture(); App.switchTab('capture')">🏠</button>
       <span id="key-status" class="badge badge-warning" style="font-size:11px">APIキー未設定</span>
       <button class="btn btn-ghost btn-icon" id="btn-api-settings" title="API設定">⚙️</button>
     </div>
@@ -117,7 +118,7 @@
       <div class="glass-card preview-container">
         <div class="preview-header">
           <span class="section-title" style="margin:0"><span class="icon">🖼️</span>プレビュー</span>
-          <button class="btn btn-ghost" id="btn-reset">✕ 選び直す</button>
+          <button class="btn btn-ghost" id="btn-reset">🏠 ホームに戻る</button>
         </div>
         <div class="preview-image-wrapper">
           <img id="preview-image" src="" alt="プレビュー画像">
@@ -245,7 +246,7 @@
             🕒 日時変更
           </button>
           <button class="btn btn-primary" id="btn-reanalyze" style="flex:1;min-width:140px">
-            🔄 別の食事を記録
+            🏠 ホームに戻る
           </button>
         </div>
 
@@ -1126,6 +1127,6 @@
 <!-- ===== Toast Container ===== -->
 <div class="toast-container" id="toast-container"></div>
 
-<script src="app.js?v=1.0.30"></script>
+<script src="app.js?v=1.0.31"></script>
 </body>
 </html>

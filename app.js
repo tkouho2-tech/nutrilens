@@ -2,7 +2,7 @@
 
 const App = {
   // Version
-  version: 'v1.0.30',
+  version: 'v1.0.31',
 
   // Default snack quick chips
   defaultSnackChips: [
