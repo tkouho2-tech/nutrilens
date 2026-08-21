@@ -8,7 +8,7 @@
   <meta http-equiv="Expires" content="0">
   <title>NutriLens — AI食事栄養分析アプリ</title>
   <meta name="description" content="食事の写真を撮るだけでAIがカロリーや栄養素を自動分析。毎日の健康管理をスマートにサポートします。">
-  <link rel="stylesheet" href="style.css?v=1.0.29">
+  <link rel="stylesheet" href="style.css?v=1.0.30">
 </head>
 <body>
 
@@ -22,7 +22,7 @@
       <div>
         <div style="display: flex; align-items: center; gap: 8px;">
           <div class="logo-text">NutriLens</div>
-          <span class="app-version-badge" id="app-version">v1.0.29</span>
+          <span class="app-version-badge" id="app-version">v1.0.30</span>
         </div>
         <div class="logo-subtitle">AI栄養分析</div>
       </div>
@@ -86,18 +86,21 @@
           </button>
         </div>
 
-        <!-- Quick Snack Suggestion Chips -->
+        <!-- Quick Snack Suggestion Chips (スマホごとに自由に追加・削除可能) -->
         <div class="quick-chips-section">
-          <div class="quick-chips-title">よくある間食・手軽に追加:</div>
-          <div class="quick-chips-list">
-            <button class="quick-chip" onclick="App.appendQuickChip('豆乳コップ1杯 (200ml)')">🥛 豆乳1杯</button>
-            <button class="quick-chip" onclick="App.appendQuickChip('草加煎餅 1枚')">🍘 煎餅1枚</button>
-            <button class="quick-chip" onclick="App.appendQuickChip('バナナ 1本')">🍌 バナナ1本</button>
-            <button class="quick-chip" onclick="App.appendQuickChip('チョコレート 2粒')">🍫 チョコ2粒</button>
-            <button class="quick-chip" onclick="App.appendQuickChip('ミックスナッツ 1握り(25g)')">🥜 ナッツ1袋</button>
-            <button class="quick-chip" onclick="App.appendQuickChip('アイスカフェラテ 1杯')">☕ カフェラテ</button>
-            <button class="quick-chip" onclick="App.appendQuickChip('プロテインバー 1本')">🍫 プロテインバー</button>
-            <button class="quick-chip" onclick="App.appendQuickChip('ゆで卵 1個')">🥚 ゆで卵1個</button>
+          <div class="quick-chips-header">
+            <div class="quick-chips-title">よくある間食・手軽に追加:</div>
+            <div class="quick-chips-actions">
+              <button class="btn-chip-action" id="btn-add-snack-chip" onclick="App.openAddChipModal()" title="新しい間食ショートカットを追加">
+                ➕ 追加
+              </button>
+              <button class="btn-chip-action" id="btn-edit-snack-chips" onclick="App.toggleSnackChipEditMode()" title="間食選択肢を編集・削除">
+                ⚙️ 編集
+              </button>
+            </div>
+          </div>
+          <div class="quick-chips-list" id="quick-chips-list">
+            <!-- JSで端末ごとに動的レンダリング -->
           </div>
         </div>
 
@@ -1084,9 +1087,45 @@
   </div>
 </div>
 
+<!-- ===== Add Snack Chip Modal ===== -->
+<div class="modal-overlay" id="add-chip-modal" role="dialog" aria-modal="true" aria-labelledby="add-chip-title" onclick="if(event.target===this)App.closeAddChipModal()">
+  <div class="modal" style="max-width:400px;">
+    <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:14px;">
+      <div id="add-chip-title" class="modal-title" style="margin:0; font-size:17px;">➕ 間食ショートカットを追加</div>
+      <button class="btn-close" onclick="App.closeAddChipModal()">×</button>
+    </div>
+
+    <div class="form-group" style="margin-bottom:12px;">
+      <label class="form-label" for="new-chip-label">
+        ボタン表示名 <span style="color:var(--text-muted);font-weight:normal;">(絵文字＋名前)</span>
+      </label>
+      <input type="text" class="form-input" id="new-chip-label" placeholder="例: 🥤 プロテイン, 🍙 おにぎり">
+    </div>
+
+    <div class="form-group" style="margin-bottom:16px;">
+      <label class="form-label" for="new-chip-text">
+        入力される食事内容・分量 <span style="color:var(--text-muted);font-weight:normal;">(任意)</span>
+      </label>
+      <input type="text" class="form-input" id="new-chip-text" placeholder="例: ホエイプロテイン 1杯 (300ml)">
+      <div style="font-size:11px; color:var(--text-muted); margin-top:4px;">
+        ※ 空欄の場合は「ボタン表示名」がそのまま入力されます
+      </div>
+    </div>
+
+    <div class="modal-actions" style="display:flex; gap:10px;">
+      <button class="btn btn-primary" onclick="App.saveNewSnackChip()" style="flex:1;">
+        追加する
+      </button>
+      <button class="btn btn-ghost" onclick="App.closeAddChipModal()">
+        キャンセル
+      </button>
+    </div>
+  </div>
+</div>
+
 <!-- ===== Toast Container ===== -->
 <div class="toast-container" id="toast-container"></div>
 
-<script src="app.js?v=1.0.29"></script>
+<script src="app.js?v=1.0.30"></script>
 </body>
 </html>

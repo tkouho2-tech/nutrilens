@@ -2,12 +2,26 @@
 
 const App = {
   // Version
-  version: 'v1.0.29',
+  version: 'v1.0.30',
+
+  // Default snack quick chips
+  defaultSnackChips: [
+    { id: 'chip-1', label: '🥛 豆乳1杯', text: '豆乳コップ1杯 (200ml)' },
+    { id: 'chip-2', label: '🍘 煎餅1枚', text: '草加煎餅 1枚' },
+    { id: 'chip-3', label: '🍌 バナナ1本', text: 'バナナ 1本' },
+    { id: 'chip-4', label: '🍫 チョコ2粒', text: 'チョコレート 2粒' },
+    { id: 'chip-5', label: '🥜 ナッツ1袋', text: 'ミックスナッツ 1握り(25g)' },
+    { id: 'chip-6', label: '☕ カフェラテ', text: 'アイスカフェラテ 1杯' },
+    { id: 'chip-7', label: '🍫 プロテインバー', text: 'プロテインバー 1本' },
+    { id: 'chip-8', label: '🥚 ゆで卵1個', text: 'ゆで卵 1個' }
+  ],
 
   // State
   state: {
     currentTab: 'capture',
     captureMode: 'photo', // 'photo' | 'text'
+    customSnackChips: null,
+    isSnackChipEditMode: false,
     apiKey: '',
     selectedModel: 'auto',
     lastWorkingModel: null,
@@ -41,6 +55,7 @@ const App = {
   async init() {
     this.renderVersion();
     await this.loadFromStorage();
+    this.renderSnackChips();
     this.bindEvents();
     this.renderHistory();
     this.renderDashboard();
@@ -95,6 +110,7 @@ const App = {
       }
 
       if (data) {
+        this.state.customSnackChips = Array.isArray(data.customSnackChips) ? data.customSnackChips : JSON.parse(JSON.stringify(this.defaultSnackChips));
         this.state.mealHistory = data.mealHistory || [];
         this.state.dailySummaries = data.dailySummaries || {};
         this.state.chatHistory = data.chatHistory || [];
@@ -110,9 +126,12 @@ const App = {
         if (cleaned || orphanCleaned) {
           await this.saveToStorage();
         }
+      } else {
+        this.state.customSnackChips = JSON.parse(JSON.stringify(this.defaultSnackChips));
       }
     } catch (e) {
       console.error('Failed to load from storage:', e);
+      this.state.customSnackChips = JSON.parse(JSON.stringify(this.defaultSnackChips));
     }
   },
 
@@ -169,6 +188,7 @@ const App = {
 
   async saveToStorage() {
     const data = {
+      customSnackChips: this.state.customSnackChips || this.defaultSnackChips,
       mealHistory: this.state.mealHistory,
       dailySummaries: this.state.dailySummaries,
       chatHistory: this.state.chatHistory,
@@ -456,6 +476,151 @@ const App = {
         if (textInputSection) textInputSection.style.display = 'block';
       }
     }
+  },
+
+  // ===== Customizable Snack Chips Management =====
+  renderSnackChips() {
+    const listEl = document.getElementById('quick-chips-list');
+    if (!listEl) return;
+
+    const chips = this.state.customSnackChips || this.defaultSnackChips;
+    const isEdit = this.state.isSnackChipEditMode;
+
+    if (isEdit) {
+      listEl.classList.add('edit-mode');
+    } else {
+      listEl.classList.remove('edit-mode');
+    }
+
+    if (!chips || chips.length === 0) {
+      listEl.innerHTML = `
+        <div style="font-size:12px; color:var(--text-muted); padding:6px 0; width:100%;">
+          登録された間食ショートカットがありません。「➕ 追加」または下のボタンから初期設定に戻せます。
+        </div>
+        <div class="quick-chips-reset-container">
+          <button type="button" class="btn-chip-reset" onclick="App.resetSnackChipsToDefault()">🔄 初期設定に戻す</button>
+        </div>
+      `;
+      return;
+    }
+
+    let html = chips.map(chip => {
+      const chipTextEscaped = (chip.text || chip.label).replace(/'/g, "\\'").replace(/"/g, '&quot;');
+      const chipLabelEscaped = (chip.label || '').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+      
+      if (isEdit) {
+        return `
+          <div class="quick-chip-item">
+            <button type="button" class="quick-chip" onclick="App.appendQuickChip('${chipTextEscaped}')">${chipLabelEscaped}</button>
+            <button type="button" class="quick-chip-delete" onclick="event.stopPropagation(); App.deleteSnackChip('${chip.id}')" title="削除">✕</button>
+          </div>
+        `;
+      } else {
+        return `
+          <div class="quick-chip-item">
+            <button type="button" class="quick-chip" onclick="App.appendQuickChip('${chipTextEscaped}')">${chipLabelEscaped}</button>
+          </div>
+        `;
+      }
+    }).join('');
+
+    if (isEdit) {
+      html += `
+        <div class="quick-chips-reset-container">
+          <button type="button" class="btn-chip-reset" onclick="App.resetSnackChipsToDefault()">🔄 初期設定に戻す</button>
+        </div>
+      `;
+    }
+
+    listEl.innerHTML = html;
+  },
+
+  toggleSnackChipEditMode() {
+    this.state.isSnackChipEditMode = !this.state.isSnackChipEditMode;
+    const btn = document.getElementById('btn-edit-snack-chips');
+    if (btn) {
+      if (this.state.isSnackChipEditMode) {
+        btn.textContent = '✓ 完了';
+        btn.classList.add('active');
+      } else {
+        btn.textContent = '⚙️ 編集';
+        btn.classList.remove('active');
+      }
+    }
+    this.renderSnackChips();
+  },
+
+  openAddChipModal() {
+    const labelInput = document.getElementById('new-chip-label');
+    const textInput = document.getElementById('new-chip-text');
+    if (labelInput) labelInput.value = '';
+    if (textInput) textInput.value = '';
+    const modal = document.getElementById('add-chip-modal');
+    if (modal) {
+      modal.classList.add('active');
+      setTimeout(() => { if (labelInput) labelInput.focus(); }, 100);
+    }
+  },
+
+  closeAddChipModal() {
+    const modal = document.getElementById('add-chip-modal');
+    if (modal) modal.classList.remove('active');
+  },
+
+  async saveNewSnackChip() {
+    const labelInput = document.getElementById('new-chip-label');
+    const textInput = document.getElementById('new-chip-text');
+    const label = labelInput ? labelInput.value.trim() : '';
+    const text = textInput ? textInput.value.trim() : '';
+
+    if (!label) {
+      this.showToast('ボタン表示名を入力してください', 'warning');
+      if (labelInput) labelInput.focus();
+      return;
+    }
+
+    const newChip = {
+      id: 'chip-' + Date.now(),
+      label: label,
+      text: text || label
+    };
+
+    if (!this.state.customSnackChips) {
+      this.state.customSnackChips = JSON.parse(JSON.stringify(this.defaultSnackChips));
+    }
+
+    this.state.customSnackChips.push(newChip);
+    await this.saveToStorage();
+    this.renderSnackChips();
+    this.closeAddChipModal();
+    this.showToast(`「${label}」を間食リストに追加しました`, 'success');
+  },
+
+  async deleteSnackChip(chipId) {
+    if (!this.state.customSnackChips) {
+      this.state.customSnackChips = JSON.parse(JSON.stringify(this.defaultSnackChips));
+    }
+    const target = this.state.customSnackChips.find(c => c.id === chipId);
+    const targetLabel = target ? target.label : '間食';
+
+    this.state.customSnackChips = this.state.customSnackChips.filter(c => c.id !== chipId);
+    await this.saveToStorage();
+    this.renderSnackChips();
+    this.showToast(`「${targetLabel}」を削除しました`, 'info');
+  },
+
+  async resetSnackChipsToDefault() {
+    if (!confirm('間食ショートカットを初期設定に戻しますか？')) return;
+    this.state.customSnackChips = JSON.parse(JSON.stringify(this.defaultSnackChips));
+    this.state.isSnackChipEditMode = false;
+    const btn = document.getElementById('btn-edit-snack-chips');
+    if (btn) {
+      btn.textContent = '⚙️ 編集';
+      btn.classList.remove('active');
+    }
+    await this.saveToStorage();
+    this.renderSnackChips();
+    this.showToast('間食ショートカットを初期設定に戻しました', 'success');
   },
 
   appendQuickChip(text) {

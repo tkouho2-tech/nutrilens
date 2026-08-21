@@ -2115,9 +2115,16 @@ body::before {
   50% { transform: scale(1.1); box-shadow: 0 0 12px rgba(255, 77, 79, 0.8); }
 }
 
-/* Quick Suggestion Chips */
+/* Quick Suggestion Chips (Customizable per device) */
 .quick-chips-section {
   margin-bottom: 18px;
+}
+
+.quick-chips-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 8px;
 }
 
 .quick-chips-title {
@@ -2126,13 +2133,52 @@ body::before {
   color: var(--text-muted);
   text-transform: uppercase;
   letter-spacing: 0.5px;
-  margin-bottom: 8px;
+}
+
+.quick-chips-actions {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.btn-chip-action {
+  background: rgba(255, 255, 255, 0.06);
+  border: 1px solid var(--glass-border);
+  color: var(--text-secondary);
+  font-size: 11px;
+  padding: 3px 8px;
+  border-radius: 12px;
+  cursor: pointer;
+  transition: var(--transition-fast);
+  font-family: inherit;
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+}
+
+.btn-chip-action:hover {
+  background: rgba(61, 255, 160, 0.15);
+  color: var(--accent-primary);
+  border-color: rgba(61, 255, 160, 0.3);
+}
+
+.btn-chip-action.active {
+  background: rgba(255, 184, 0, 0.2);
+  color: #ffc837;
+  border-color: #ffc837;
+  font-weight: 700;
 }
 
 .quick-chips-list {
   display: flex;
   flex-wrap: wrap;
   gap: 6px;
+}
+
+.quick-chip-item {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
 }
 
 .quick-chip {
@@ -2159,6 +2205,60 @@ body::before {
 
 .quick-chip:active {
   transform: scale(0.96);
+}
+
+/* Edit Mode for Chips */
+.quick-chips-list.edit-mode .quick-chip {
+  padding-right: 24px;
+  border-color: rgba(255, 75, 75, 0.4);
+  background: rgba(255, 75, 75, 0.08);
+}
+
+.quick-chip-delete {
+  position: absolute;
+  right: 4px;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 16px;
+  height: 16px;
+  background: #ff4d4f;
+  color: #fff;
+  border-radius: 50%;
+  border: none;
+  font-size: 10px;
+  font-weight: 700;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: transform 0.15s ease;
+  line-height: 1;
+  padding: 0;
+}
+
+.quick-chip-delete:hover {
+  transform: translateY(-50%) scale(1.2);
+  background: #ff2a2d;
+}
+
+.quick-chips-reset-container {
+  width: 100%;
+  text-align: right;
+  margin-top: 6px;
+}
+
+.btn-chip-reset {
+  background: none;
+  border: none;
+  color: var(--text-muted);
+  font-size: 11px;
+  cursor: pointer;
+  text-decoration: underline;
+  padding: 2px 4px;
+}
+
+.btn-chip-reset:hover {
+  color: var(--text-primary);
 }
 
 .text-input-actions {
