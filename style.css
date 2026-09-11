@@ -2592,3 +2592,31 @@ body::before {
   line-height: 1.5;
   word-break: break-word;
 }
+
+/* ===== Steps & Prediction Cards ===== */
+.step-chip {
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid var(--glass-border);
+  border-radius: 12px;
+  padding: 4px 10px;
+  font-size: 11px;
+  color: var(--text-secondary);
+  cursor: pointer;
+  transition: var(--transition-fast);
+}
+
+.step-chip:hover {
+  background: rgba(61, 255, 160, 0.15);
+  border-color: rgba(61, 255, 160, 0.4);
+  color: var(--accent-primary);
+  transform: translateY(-1px);
+}
+
+.prediction-card {
+  transition: var(--transition);
+}
+
+.prediction-card:hover {
+  border-color: rgba(61, 255, 160, 0.4);
+  box-shadow: 0 4px 20px rgba(61, 255, 160, 0.08);
+}
