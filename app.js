@@ -2,7 +2,148 @@
 
 const App = {
   // Version
-  version: 'v1.0.34',
+  version: 'v1.0.36',
+
+  // Nutrient Health Effects Map
+  nutrientEffectMap: {
+    protein: { icon: '💪', name: 'タンパク質', effect: '筋肉・肌の修復、基礎代謝の維持' },
+    fat: { icon: '🧈', name: '脂質', effect: '細胞膜・ホルモン材料、ビタミン吸収' },
+    carbs: { icon: '🍚', name: '炭水化物', effect: '脳・身体の即効エネルギー源' },
+    fiber: { icon: '🌿', name: '食物繊維', effect: '腸内環境改善・血糖値急上昇抑制' },
+    sodium: { icon: '🧂', name: 'ナトリウム', effect: '体液浸透圧維持（減塩意識推奨）' },
+    calcium: { icon: '🦴', name: 'カルシウム', effect: '骨・歯の形成、神経安定サポート' },
+    iron: { icon: '⚡', name: '鉄分', effect: '全身への酸素運搬、疲労・貧血予防' },
+    vitaminC: { icon: '🍋', name: 'ビタミンC', effect: '強い抗酸化作用、免疫＆美肌維持' },
+    vitaminA: { icon: '👁️', name: 'ビタミンA', effect: '目の健康維持、粘膜・皮膚バリア' }
+  },
+
+  // Calculate daily cumulative calorie and goal progress
+  calculateDailyCalorieStatus(targetDate, mealCalories = 0, currentMealId = null) {
+    const dateObj = typeof targetDate === 'string' ? new Date(targetDate) : (targetDate || new Date());
+    const y = dateObj.getFullYear();
+    const m = String(dateObj.getMonth() + 1).padStart(2, '0');
+    const d = String(dateObj.getDate()).padStart(2, '0');
+    const dateStr = `${y}-${m}-${d}`;
+    const displayDateStr = `${dateObj.getMonth() + 1}/${dateObj.getDate()}`;
+
+    // 対象日の既存食事を合計（currentMealIdがあれば重複防止で除外）
+    const dayMeals = this.state.mealHistory.filter(meal => {
+      if (currentMealId && meal.id === currentMealId) return false;
+      const md = new Date(meal.timestamp);
+      const mds = `${md.getFullYear()}-${String(md.getMonth() + 1).padStart(2, '0')}-${String(md.getDate()).padStart(2, '0')}`;
+      return mds === dateStr;
+    });
+
+    const previousCalories = dayMeals.reduce((sum, item) => sum + (item.calories || 0), 0);
+    const totalCalories = previousCalories + mealCalories;
+    const goalCalories = this.state.goals?.calories || 1800;
+
+    const remainingCalories = goalCalories - totalCalories;
+    const progressPercent = Math.min(100, Math.round((totalCalories / goalCalories) * 100));
+
+    const curW = this.state.userBody?.currentWeight || 65;
+    const tarW = this.state.userBody?.targetWeight || 60;
+    const weightDiff = parseFloat((tarW - curW).toFixed(1));
+    let modeLabel = '⚖️ 維持目標';
+    let modeType = 'maintain';
+    if (weightDiff < -0.2) {
+      modeLabel = `📉 減量目標 (${Math.abs(weightDiff)}kg減)`;
+      modeType = 'lose';
+    } else if (weightDiff > 0.2) {
+      modeLabel = `📈 増量目標 (+${weightDiff}kg増)`;
+      modeType = 'gain';
+    }
+
+    return {
+      dateStr,
+      displayDateStr,
+      previousCalories,
+      mealCalories,
+      totalCalories,
+      goalCalories,
+      remainingCalories,
+      progressPercent,
+      modeLabel,
+      modeType,
+      curW,
+      tarW,
+      weightDiff
+    };
+  },
+
+  // Generate health benefits list from result
+  generateHealthBenefits(result) {
+    if (result.healthBenefits && Array.isArray(result.healthBenefits) && result.healthBenefits.length > 0) {
+      return result.healthBenefits.map(b => {
+        if (typeof b === 'string') {
+          return { icon: '✨', title: b, desc: '' };
+        }
+        return {
+          icon: b.icon || '✨',
+          title: b.title || '健康サポート',
+          desc: b.desc || ''
+        };
+      });
+    }
+
+    // フォールバック自動判定
+    const benefits = [];
+    const pfc = result.pfc || {};
+    const n = result.nutrients || {};
+
+    if ((pfc.protein || 0) >= 15) {
+      benefits.push({
+        icon: '💪',
+        title: '筋肉修復・基礎代謝アップ',
+        desc: `タンパク質が${pfc.protein}g含まれ、筋肉や肌のターンオーバーを促し、代謝向上をサポートします。`
+      });
+    }
+    if ((n.fiber || 0) >= 2.5) {
+      benefits.push({
+        icon: '🌿',
+        title: '腸内環境の改善・糖吸収抑制',
+        desc: `食物繊維が${n.fiber}g含まれ、食後の血糖値急上昇を抑え、腸内フローラを整えます。`
+      });
+    }
+    if ((n.vitaminC || 0) >= 15) {
+      benefits.push({
+        icon: '🍋',
+        title: '抗酸化作用・免疫力サポート',
+        desc: `ビタミンCが${n.vitaminC}mg含まれ、活性酸素のダメージを抑えて免疫と美肌をサポートします。`
+      });
+    }
+    if ((n.iron || 0) >= 1.5) {
+      benefits.push({
+        icon: '⚡',
+        title: '貧血予防・全身への酸素供給',
+        desc: `鉄分が${n.iron}mg含まれ、ヘモグロビンを増やして日中のだるさや疲れを防ぎます。`
+      });
+    }
+    if ((n.calcium || 0) >= 120) {
+      benefits.push({
+        icon: '🦴',
+        title: '骨と歯の強化・神経リフレッシュ',
+        desc: `カルシウムが${n.calcium}mg含まれ、骨密度の維持やイライラ予防に役立ちます。`
+      });
+    }
+    if ((n.sodium || 0) > 0 && (n.sodium || 0) <= 600) {
+      benefits.push({
+        icon: '🧂',
+        title: '適正な塩分量・血圧管理',
+        desc: `塩分（食塩換算約${((n.sodium * 2.54) / 1000).toFixed(1)}g）が適正範囲で、血圧やむくみに優しいバランスです。`
+      });
+    }
+
+    if (benefits.length === 0) {
+      benefits.push({
+        icon: '✨',
+        title: '主要栄養素と活動エネルギーの補給',
+        desc: 'カロリーと三大栄養素をバランスよく補給し、日々の活力と健康を維持します。'
+      });
+    }
+
+    return benefits;
+  },
 
   // Default snack quick chips
   defaultSnackChips: [
@@ -40,6 +181,7 @@ const App = {
       userName: '',
       birthDate: '',
       gender: 'male',
+      height: 170,
       currentWeight: 65,
       targetWeight: 60,
       activityLevel: 'moderate',
@@ -289,7 +431,7 @@ const App = {
     document.querySelectorAll('.goal-input').forEach(input => {
       input.addEventListener('change', () => this.saveGoals());
     });
-    ['user-current-weight', 'user-target-weight', 'user-activity-level'].forEach(id => {
+    ['user-height', 'user-current-weight', 'user-target-weight', 'user-activity-level'].forEach(id => {
       const el = document.getElementById(id);
       if (el) {
         el.addEventListener('input', () => this.calculateGoalsFromWeight());
@@ -1052,6 +1194,8 @@ const App = {
     const diff = (tarW - curW).toFixed(1);
     const age = this.getAge(ub.birthDate);
     const genderStr = ub.gender === 'female' ? '女性' : ub.gender === 'male' ? '男性' : '';
+    const heightStr = ub.height ? `身長:${ub.height}cm` : '';
+    const bmiStr = (ub.height && curW) ? `BMI:${(curW / Math.pow(ub.height / 100, 2)).toFixed(1)}` : '';
     const bpStr = (ub.bloodPressureSystolic && ub.bloodPressureDiastolic)
       ? `血圧:${ub.bloodPressureSystolic}/${ub.bloodPressureDiastolic}mmHg`
       : '';
@@ -1059,17 +1203,29 @@ const App = {
       uName,
       age !== null ? `${age}歳` : '',
       genderStr,
+      heightStr,
+      bmiStr,
       bpStr
     ].filter(Boolean).join(', ');
+
+    // 本日の累積カロリー状況の計算
+    const dailyStatus = this.calculateDailyCalorieStatus(new Date(), 0);
+    const prevDayCal = dailyStatus.previousCalories;
 
     let goalStr = `現在の体重: ${curW}kg, 目標体重: ${tarW}kg (${diff < 0 ? `減量 ${Math.abs(diff)}kg 目標` : diff > 0 ? `増量 ${diff}kg 目標` : '体重維持目標'}, 1日目標: ${goalCal}kcal)${extraInfo ? `, プロフィール:[${extraInfo}]` : ''}`;
     if (ub.routineNotes) {
       goalStr += `, 生活習慣・ルーティン・特記事項: [${ub.routineNotes}]`;
     }
 
-    const prompt = `この料理の写真を詳しく分析して、以下のJSON形式で栄養情報を返してください。
+    const prompt = `この料理の写真を詳しく分析して、以下のJSON形式で栄養情報および体内効果を返してください。
 ユーザーの身体・目標・生活ルーティン情報: 【${goalStr}】
-aiCommentには、このユーザー（${uName || 'ユーザー'}）の目標（${diff < 0 ? '減量' : diff > 0 ? '増量' : '維持'}）および生活ルーティン・特記事項（設定されている場合）を考慮した個別アドバイスに加えて、分析した特徴的な栄養素が体にどのような効果（メリット）や悪影響（デメリット）をもたらすかを具体的に含め、日本語3〜4文程度で記述してください。${uName ? `可能であれば文頭などで自然に「${uName}」と呼びかけてください。` : ''}
+【本日（日付単位）の食事累積状況】:
+- 本日これまでの摂取合計: ${prevDayCal} kcal
+- 1日目標摂取カロリー: ${goalCal} kcal（${diff < 0 ? '減量目標' : diff > 0 ? '増量目標' : '維持目標'}）
+
+【AIアドバイス(aiComment)の重要指示】:
+食事単体のカロリーを1日目標全体と直接比べるのではなく、この食事のカロリーを加算した『本日の累積摂取カロリー（本日合計/1日目標${goalCal}kcal）』を踏まえ、体重の${diff < 0 ? '減量' : diff > 0 ? '増量' : '維持'}目標に対してあとどれくらいカロリーの増減・調整が必要か、またこの食事に含まれる栄養素が体にどのような効果（メリット・健康作用）をもたらすかを、具体的かつ自然な日本語3〜4文程度で記述してください。${uName ? `可能であれば文頭などで自然に「${uName}」と呼びかけてください。` : ''}
+
 推定値で構いません。必ずJSON形式のみで返し、説明文は不要です。
 itemsには写真に写っている個々のおかず・食材をそれぞれ列挙してください。
 
@@ -1085,7 +1241,7 @@ itemsには写真に写っている個々のおかず・食材をそれぞれ列
       "calories": 数値（kcal）,
       "weight": "推定重量（例: 約150g）",
       "pfc": { "protein": 数値（g）, "fat": 数値（g）, "carbs": 数値（g）},
-      "mainNutrients": "主な栄養素の特徴（日本語1文）"
+      "mainNutrients": "主な栄養素と体内での働き（日本語1文）"
     }
   ],
   "pfc": {
@@ -1101,8 +1257,15 @@ itemsには写真に写っている個々のおかず・食材をそれぞれ列
     "vitaminC": 数値（mg）,
     "vitaminA": 数値（μg）
   },
+  "healthBenefits": [
+    {
+      "icon": "絵文字1文字（例: 💪, 🌿, 🍋, ⚡ など）",
+      "title": "身体への効果名（例: 筋肉修復・基礎代謝維持）",
+      "desc": "この食事の栄養素が体にもたらす具体的な働き・メリット（日本語1文）"
+    }
+  ],
   "healthScore": 数値（1-10、健康的かどうか）,
-  "aiComment": "この食事についての健康・目標アドバイスと栄養素の効果（日本語、3〜4文程度）"
+  "aiComment": "本日の累積カロリー進捗・目標増減アドバイスと栄養素の体内効果（日本語、3〜4文程度）"
 }`;
 
     return await this.executeGeminiGenerate({
@@ -1122,6 +1285,8 @@ itemsには写真に写っている個々のおかず・食材をそれぞれ列
     const diff = (tarW - curW).toFixed(1);
     const age = this.getAge(ub.birthDate);
     const genderStr = ub.gender === 'female' ? '女性' : ub.gender === 'male' ? '男性' : '';
+    const heightStr = ub.height ? `身長:${ub.height}cm` : '';
+    const bmiStr = (ub.height && curW) ? `BMI:${(curW / Math.pow(ub.height / 100, 2)).toFixed(1)}` : '';
     const bpStr = (ub.bloodPressureSystolic && ub.bloodPressureDiastolic)
       ? `血圧:${ub.bloodPressureSystolic}/${ub.bloodPressureDiastolic}mmHg`
       : '';
@@ -1129,8 +1294,14 @@ itemsには写真に写っている個々のおかず・食材をそれぞれ列
       uName,
       age !== null ? `${age}歳` : '',
       genderStr,
+      heightStr,
+      bmiStr,
       bpStr
     ].filter(Boolean).join(', ');
+
+    // 本日の累積カロリー状況の計算
+    const dailyStatus = this.calculateDailyCalorieStatus(new Date(), 0);
+    const prevDayCal = dailyStatus.previousCalories;
 
     let goalStr = `現在の体重: ${curW}kg, 目標体重: ${tarW}kg (${diff < 0 ? `減量 ${Math.abs(diff)}kg 目標` : diff > 0 ? `増量 ${diff}kg 目標` : '体重維持目標'}, 1日目標: ${goalCal}kcal)${extraInfo ? `, プロフィール:[${extraInfo}]` : ''}`;
     if (ub.routineNotes) {
@@ -1141,7 +1312,13 @@ itemsには写真に写っている個々のおかず・食材をそれぞれ列
 【入力された食事/間食内容】: 「${mealText}」
 
 ユーザーの身体・目標・生活ルーティン情報: 【${goalStr}】
-aiCommentには、このユーザー（${uName || 'ユーザー'}）の目標（${diff < 0 ? '減量' : diff > 0 ? '増量' : '維持'}）および生活ルーティンを考慮した個別アドバイスに加えて、分析した特徴的な栄養素（間食であれば血糖値への影響やエネルギー補給の観点など）が体にどのような効果や影響をもたらすかを具体的に含め、日本語3〜4文程度で記述してください。${uName ? `可能であれば文頭などで自然に「${uName}」と呼びかけてください。` : ''}
+【本日（日付単位）の食事累積状況】:
+- 本日これまでの摂取合計: ${prevDayCal} kcal
+- 1日目標摂取カロリー: ${goalCal} kcal（${diff < 0 ? '減量目標' : diff > 0 ? '増量目標' : '維持目標'}）
+
+【AIアドバイス(aiComment)の重要指示】:
+食事単体のカロリーを1日目標全体と直接比べるのではなく、この食事/間食を加算した『本日の累積摂取カロリー（本日合計/1日目標${goalCal}kcal）』を踏まえ、体重の${diff < 0 ? '減量' : diff > 0 ? '増量' : '維持'}目標に対してあとどれくらいカロリーの増減・調整が必要か、また摂取した栄養素が体にどのような効果（間食であれば血糖値・エネルギー持続・代謝等への影響）をもたらすかを、具体的かつ自然な日本語3〜4文程度で記述してください。${uName ? `可能であれば文頭などで自然に「${uName}」と呼びかけてください。` : ''}
+
 推定値で構いません。必ずJSON形式のみで返し、説明文は不要です。
 itemsには入力された個々の品目・食材をそれぞれ列挙してください。
 
@@ -1157,7 +1334,7 @@ itemsには入力された個々の品目・食材をそれぞれ列挙してく
       "calories": 数値（kcal）,
       "weight": "分量・重量（例: 200ml）",
       "pfc": { "protein": 数値（g）, "fat": 数値（g）, "carbs": 数値（g）},
-      "mainNutrients": "主な栄養素の特徴（日本語1文）"
+      "mainNutrients": "主な栄養素と体内での働き（日本語1文）"
     }
   ],
   "pfc": {
@@ -1173,8 +1350,15 @@ itemsには入力された個々の品目・食材をそれぞれ列挙してく
     "vitaminC": 数値（mg）,
     "vitaminA": 数値（μg）
   },
+  "healthBenefits": [
+    {
+      "icon": "絵文字1文字（例: 💪, 🌿, 🍋, ⚡ など）",
+      "title": "身体への効果名（例: 腸内環境改善と腹持ち）",
+      "desc": "この食事/間食の栄養素が体にもたらす具体的な働き・メリット（日本語1文）"
+    }
+  ],
   "healthScore": 数値（1-10、健康的かどうか）,
-  "aiComment": "この食事/間食についてのアドバイスと栄養効果（日本語、3〜4文程度）"
+  "aiComment": "本日の累積カロリー進捗・目標増減アドバイスと栄養素の体内効果（日本語、3〜4文程度）"
 }`;
 
     return await this.executeGeminiGenerate({
@@ -1193,6 +1377,8 @@ itemsには入力された個々の品目・食材をそれぞれ列挙してく
     const diff = (tarW - curW).toFixed(1);
     const age = this.getAge(ub.birthDate);
     const genderStr = ub.gender === 'female' ? '女性' : ub.gender === 'male' ? '男性' : '';
+    const heightStr = ub.height ? `身長:${ub.height}cm` : '';
+    const bmiStr = (ub.height && curW) ? `BMI:${(curW / Math.pow(ub.height / 100, 2)).toFixed(1)}` : '';
     const bpStr = (ub.bloodPressureSystolic && ub.bloodPressureDiastolic)
       ? `血圧:${ub.bloodPressureSystolic}/${ub.bloodPressureDiastolic}mmHg`
       : '';
@@ -1200,8 +1386,15 @@ itemsには入力された個々の品目・食材をそれぞれ列挙してく
       uName,
       age !== null ? `${age}歳` : '',
       genderStr,
+      heightStr,
+      bmiStr,
       bpStr
     ].filter(Boolean).join(', ');
+
+    // 訂正対象の日付の累積カロリー状況の計算
+    const mealDate = previousMeal?.timestamp ? new Date(previousMeal.timestamp) : new Date();
+    const dailyStatus = this.calculateDailyCalorieStatus(mealDate, 0, previousMeal?.id);
+    const prevDayCal = dailyStatus.previousCalories;
 
     let goalStr = `現在の体重: ${curW}kg, 目標体重: ${tarW}kg (${diff < 0 ? `減量 ${Math.abs(diff)}kg 目標` : diff > 0 ? `増量 ${diff}kg 目標` : '体重維持目標'}, 1日目標: ${goalCal}kcal)${extraInfo ? `, プロフィール:[${extraInfo}]` : ''}`;
     if (ub.routineNotes) {
@@ -1215,10 +1408,14 @@ itemsには入力された個々の品目・食材をそれぞれ列挙してく
 【ユーザーからの訂正・指示内容】:
 「${correctionText}」
 
-${imageBase64 ? '添付された食事写真の特徴と、' : ''}このユーザーの訂正指示を最優先で正確に反映し、正しい料理名、推定カロリー、PFCバランス、各食材/おかず内訳、各種栄養素、健康スコア、AIアドバイスを再計算して、以下のJSON形式のみで返してください。
+${imageBase64 ? '添付された食事写真の特徴と、' : ''}このユーザーの訂正指示を最優先で正確に反映し、正しい料理名、推定カロリー、PFCバランス、各食材/おかず内訳、各種栄養素、健康効果(healthBenefits)、健康スコア、AIアドバイスを再計算して、以下のJSON形式のみで返してください。
 
 ユーザーの身体・目標・生活ルーティン情報: 【${goalStr}】
-aiCommentには、訂正された料理（${uName || 'ユーザー'}さんの目標: ${diff < 0 ? '減量' : diff > 0 ? '増量' : '維持'}）に基づき、栄養的観点や健康アドバイスを日本語3〜4文程度で記述してください。${uName ? `可能であれば文頭などで自然に「${uName}」と呼びかけてください。` : ''}
+【本日（日付単位）の食事累積状況】:
+- 本日これまでの摂取合計: ${prevDayCal} kcal
+- 1日目標摂取カロリー: ${goalCal} kcal（${diff < 0 ? '減量目標' : diff > 0 ? '増量目標' : '維持目標'}）
+
+aiCommentには、訂正された料理に基づき、食事単体だけでなく本日の累積摂取カロリー（本日合計/1日目標${goalCal}kcal）と体重増減目標を踏まえた残りカロリー増減アドバイス、および栄養素の体内効果を日本語3〜4文程度で記述してください。${uName ? `可能であれば文頭などで自然に「${uName}」と呼びかけてください。` : ''}
 必ずJSON形式のみで返し、説明文は不要です。
 
 {
@@ -1233,7 +1430,7 @@ aiCommentには、訂正された料理（${uName || 'ユーザー'}さんの目
       "calories": 数値（kcal）,
       "weight": "推定重量（例: 約150g）",
       "pfc": { "protein": 数値（g）, "fat": 数値（g）, "carbs": 数値（g）},
-      "mainNutrients": "主な栄養素の特徴（日本語1文）"
+      "mainNutrients": "主な栄養素と体内での働き（日本語1文）"
     }
   ],
   "pfc": {
@@ -1249,8 +1446,15 @@ aiCommentには、訂正された料理（${uName || 'ユーザー'}さんの目
     "vitaminC": 数値（mg）,
     "vitaminA": 数値（μg）
   },
+  "healthBenefits": [
+    {
+      "icon": "絵文字1文字",
+      "title": "身体への効果名",
+      "desc": "この料理の栄養素が体にもたらす具体的な働き・メリット（日本語1文）"
+    }
+  ],
   "healthScore": 数値（1-10、健康的かどうか）,
-  "aiComment": "訂正された料理に対する個別アドバイス（日本語、3〜4文程度）"
+  "aiComment": "訂正された料理に対する累積カロリー・目標増減アドバイスと体内効果（日本語、3〜4文程度）"
 }`;
 
     return await this.executeGeminiGenerate({
@@ -1279,7 +1483,7 @@ aiCommentには、訂正された料理（${uName || 'ユーザー'}さんの目
       badgeEl.className = `badge ${healthScore >= 7 ? 'badge-success' : 'badge-warning'}`;
     }
 
-    // Calorie ring
+    // Calorie ring (meal calories)
     const calories = result.calories || 0;
     document.getElementById('result-calories').textContent = calories;
     const goalCal = this.state.goals.calories;
@@ -1292,6 +1496,46 @@ aiCommentには、訂正された料理（${uName || 'ユーザー'}さんの目
       // Count up animation
       this.animateCount('result-calories', 0, calories, 1200);
     }, 100);
+
+    // Daily Cumulative Calorie Progress Box
+    const dailyStatus = this.calculateDailyCalorieStatus(new Date(), calories);
+    const dateLabelEl = document.getElementById('result-daily-date-label');
+    if (dateLabelEl) dateLabelEl.textContent = `本日 (${dailyStatus.displayDateStr}) の累積カロリー`;
+
+    const modeBadgeEl = document.getElementById('result-daily-goal-mode-badge');
+    if (modeBadgeEl) modeBadgeEl.textContent = dailyStatus.modeLabel;
+
+    const totalCalEl = document.getElementById('result-daily-total-cal');
+    if (totalCalEl) totalCalEl.textContent = dailyStatus.totalCalories.toLocaleString();
+
+    const goalCalEl = document.getElementById('result-daily-goal-cal');
+    if (goalCalEl) goalCalEl.textContent = `${dailyStatus.goalCalories.toLocaleString()} kcal`;
+
+    const mealDiffBadgeEl = document.getElementById('result-meal-cal-diff-badge');
+    if (mealDiffBadgeEl) mealDiffBadgeEl.textContent = `+${calories} kcal`;
+
+    const remainingBadgeEl = document.getElementById('result-daily-remaining-badge');
+    const remainingValEl = document.getElementById('result-daily-remaining-val');
+    const progressBarEl = document.getElementById('result-daily-progress-bar');
+
+    if (remainingBadgeEl) {
+      if (dailyStatus.remainingCalories >= 0) {
+        remainingBadgeEl.className = 'daily-remaining-badge badge-within';
+        remainingBadgeEl.innerHTML = `あと <strong id="result-daily-remaining-val">${dailyStatus.remainingCalories.toLocaleString()}</strong> kcal 摂取可能`;
+      } else {
+        remainingBadgeEl.className = 'daily-remaining-badge badge-over';
+        remainingBadgeEl.innerHTML = `目標を <strong id="result-daily-remaining-val">+${Math.abs(dailyStatus.remainingCalories).toLocaleString()}</strong> kcal 超過`;
+      }
+    }
+
+    if (progressBarEl) {
+      progressBarEl.style.width = `${dailyStatus.progressPercent}%`;
+      if (dailyStatus.remainingCalories < 0) {
+        progressBarEl.classList.add('bar-over');
+      } else {
+        progressBarEl.classList.remove('bar-over');
+      }
+    }
 
     // PFC
     const { protein = 0, fat = 0, carbs = 0 } = result.pfc || {};
@@ -1310,20 +1554,39 @@ aiCommentには、訂正された料理（${uName || 'ユーザー'}さんの目
       document.getElementById('pfc-carbs-bar').style.width = `${carbsPct}%`;
     }, 200);
 
-    // Nutrients
+    // Health Benefits (体内効果・健康メリット)
+    const benefitsListEl = document.getElementById('result-health-benefits-list');
+    if (benefitsListEl) {
+      const benefits = this.generateHealthBenefits(result);
+      benefitsListEl.innerHTML = '';
+      benefits.forEach(b => {
+        const item = document.createElement('div');
+        item.className = 'health-benefit-item slide-in';
+        item.innerHTML = `
+          <div class="health-benefit-icon">${b.icon || '✨'}</div>
+          <div class="health-benefit-content">
+            <div class="health-benefit-title">${b.title}</div>
+            ${b.desc ? `<div class="health-benefit-desc">${b.desc}</div>` : ''}
+          </div>
+        `;
+        benefitsListEl.appendChild(item);
+      });
+    }
+
+    // Nutrients Grid with Health Effects
     const n = result.nutrients || {};
     const nutrientMap = [
-      { id: 'n-fiber', value: n.fiber, unit: 'g', icon: '🌿', name: '食物繊維' },
-      { id: 'n-sodium', value: n.sodium, unit: 'mg', icon: '🧂', name: 'ナトリウム' },
-      { id: 'n-calcium', value: n.calcium, unit: 'mg', icon: '🦴', name: 'カルシウム' },
-      { id: 'n-iron', value: n.iron, unit: 'mg', icon: '⚡', name: '鉄分' },
-      { id: 'n-vitC', value: n.vitaminC, unit: 'mg', icon: '🍋', name: 'ビタミンC' },
-      { id: 'n-vitA', value: n.vitaminA, unit: 'μg', icon: '👁️', name: 'ビタミンA' },
+      { id: 'n-fiber', value: n.fiber, unit: 'g', icon: '🌿', name: '食物繊維', effect: '腸内環境・血糖ケア' },
+      { id: 'n-sodium', value: n.sodium, unit: 'mg', icon: '🧂', name: 'ナトリウム', effect: '浸透圧調整(減塩推奨)' },
+      { id: 'n-calcium', value: n.calcium, unit: 'mg', icon: '🦴', name: 'カルシウム', effect: '骨・歯強化＆神経安定' },
+      { id: 'n-iron', value: n.iron, unit: 'mg', icon: '⚡', name: '鉄分', effect: '全身酸素運搬＆貧血予防' },
+      { id: 'n-vitC', value: n.vitaminC, unit: 'mg', icon: '🍋', name: 'ビタミンC', effect: '抗酸化＆免疫美肌維持' },
+      { id: 'n-vitA', value: n.vitaminA, unit: 'μg', icon: '👁️', name: 'ビタミンA', effect: '視力維持＆粘膜バリア' },
     ];
 
     const grid = document.getElementById('nutrients-grid');
     grid.innerHTML = '';
-    nutrientMap.forEach(({ icon, name, value, unit }) => {
+    nutrientMap.forEach(({ icon, name, value, unit, effect }) => {
       if (value !== undefined && value !== null) {
         const chip = document.createElement('div');
         chip.className = 'nutrient-chip slide-in';
@@ -1331,6 +1594,7 @@ aiCommentには、訂正された料理（${uName || 'ユーザー'}さんの目
           <span class="nutrient-chip-icon">${icon}</span>
           <div class="nutrient-chip-name">${name}</div>
           <div class="nutrient-chip-value">${value}<span class="nutrient-chip-unit"> ${unit}</span></div>
+          <div class="nutrient-chip-effect">🩺 ${effect}</div>
         `;
         grid.appendChild(chip);
       }
@@ -1460,7 +1724,7 @@ aiCommentには、訂正された料理（${uName || 'ユーザー'}さんの目
             <span class="item-pfc-label carbs-text">C: ${carbs}g</span>
           </div>
         </div>
-        ${item.mainNutrients ? `<div class="item-nutrient-note">💡 ${item.mainNutrients}</div>` : ''}
+        ${item.mainNutrients ? `<div class="item-nutrient-note" style="background:rgba(61,255,160,0.06);border-left:2px solid var(--accent-primary);padding:6px 10px;border-radius:4px;margin-top:8px;font-size:12px;color:var(--text-secondary)">🩺 <strong>体への効果・特徴:</strong> ${item.mainNutrients}</div>` : ''}
       `;
       listEl.appendChild(card);
       setTimeout(() => {
@@ -2647,7 +2911,47 @@ aiCommentには、訂正された料理（${uName || 'ユーザー'}さんの目
     document.getElementById('detail-food-name').textContent = meal.foodName || '不明な料理';
     document.getElementById('detail-food-name-en').textContent = meal.foodNameEn || '';
     document.getElementById('detail-time').textContent = timeStr;
-    document.getElementById('detail-calories').textContent = meal.calories || 0;
+    // Calorie & Daily Cumulative Progress in Modal
+    const calories = meal.calories || 0;
+    document.getElementById('detail-calories').textContent = calories;
+
+    const mealDate = new Date(meal.timestamp);
+    const dailyStatus = this.calculateDailyCalorieStatus(mealDate, calories, meal.id);
+
+    const detailDateLabelEl = document.getElementById('detail-daily-date-label');
+    if (detailDateLabelEl) detailDateLabelEl.textContent = `${dailyStatus.displayDateStr} の累積カロリー`;
+
+    const detailModeBadgeEl = document.getElementById('detail-daily-goal-mode-badge');
+    if (detailModeBadgeEl) detailModeBadgeEl.textContent = dailyStatus.modeLabel;
+
+    const detailTotalCalEl = document.getElementById('detail-daily-total-cal');
+    if (detailTotalCalEl) detailTotalCalEl.textContent = dailyStatus.totalCalories.toLocaleString();
+
+    const detailGoalCalEl = document.getElementById('detail-daily-goal-cal');
+    if (detailGoalCalEl) detailGoalCalEl.textContent = `${dailyStatus.goalCalories.toLocaleString()} kcal`;
+
+    const detailRemainingBadgeEl = document.getElementById('detail-daily-remaining-badge');
+    const detailProgressBarEl = document.getElementById('detail-daily-progress-bar');
+
+    if (detailRemainingBadgeEl) {
+      if (dailyStatus.remainingCalories >= 0) {
+        detailRemainingBadgeEl.className = 'daily-remaining-badge badge-within';
+        detailRemainingBadgeEl.innerHTML = `あと <strong id="detail-daily-remaining-val">${dailyStatus.remainingCalories.toLocaleString()}</strong> kcal 摂取可能`;
+      } else {
+        detailRemainingBadgeEl.className = 'daily-remaining-badge badge-over';
+        detailRemainingBadgeEl.innerHTML = `目標を <strong id="detail-daily-remaining-val">+${Math.abs(dailyStatus.remainingCalories).toLocaleString()}</strong> kcal 超過`;
+      }
+    }
+
+    if (detailProgressBarEl) {
+      detailProgressBarEl.style.width = `${dailyStatus.progressPercent}%`;
+      if (dailyStatus.remainingCalories < 0) {
+        detailProgressBarEl.classList.add('bar-over');
+      } else {
+        detailProgressBarEl.classList.remove('bar-over');
+      }
+    }
+
     const hs = meal.healthScore || 5;
     const hsBadge = document.getElementById('detail-health-badge');
     hsBadge.textContent = `健康スコア ${hs}/10`;
@@ -2678,19 +2982,38 @@ aiCommentには、訂正された料理（${uName || 'ユーザー'}さんの目
       document.getElementById('detail-pfc-carbs').style.width = `${cPct}%`;
     }, 150);
 
+    // Health Benefits (体内効果・健康メリット)
+    const detailBenefitsListEl = document.getElementById('detail-health-benefits-list');
+    if (detailBenefitsListEl) {
+      const benefits = this.generateHealthBenefits(meal);
+      detailBenefitsListEl.innerHTML = '';
+      benefits.forEach(b => {
+        const item = document.createElement('div');
+        item.className = 'health-benefit-item';
+        item.innerHTML = `
+          <div class="health-benefit-icon">${b.icon || '✨'}</div>
+          <div class="health-benefit-content">
+            <div class="health-benefit-title">${b.title}</div>
+            ${b.desc ? `<div class="health-benefit-desc">${b.desc}</div>` : ''}
+          </div>
+        `;
+        detailBenefitsListEl.appendChild(item);
+      });
+    }
+
     // Nutrients
     const n = meal.nutrients || {};
     const nutrientMap = [
-      { value: n.fiber, unit: 'g', icon: '🌿', name: '食物繊維' },
-      { value: n.sodium, unit: 'mg', icon: '🧂', name: 'ナトリウム' },
-      { value: n.calcium, unit: 'mg', icon: '🦴', name: 'カルシウム' },
-      { value: n.iron, unit: 'mg', icon: '⚡', name: '鉄分' },
-      { value: n.vitaminC, unit: 'mg', icon: '🍋', name: 'ビタミンC' },
-      { value: n.vitaminA, unit: 'μg', icon: '👁️', name: 'ビタミンA' },
+      { value: n.fiber, unit: 'g', icon: '🌿', name: '食物繊維', effect: '腸内環境・血糖ケア' },
+      { value: n.sodium, unit: 'mg', icon: '🧂', name: 'ナトリウム', effect: '浸透圧調整(減塩推奨)' },
+      { value: n.calcium, unit: 'mg', icon: '🦴', name: 'カルシウム', effect: '骨・歯強化＆神経安定' },
+      { value: n.iron, unit: 'mg', icon: '⚡', name: '鉄分', effect: '全身酸素運搬＆貧血予防' },
+      { value: n.vitaminC, unit: 'mg', icon: '🍋', name: 'ビタミンC', effect: '抗酸化＆免疫美肌維持' },
+      { value: n.vitaminA, unit: 'μg', icon: '👁️', name: 'ビタミンA', effect: '視力維持＆粘膜バリア' },
     ];
     const ngrid = document.getElementById('detail-nutrients-grid');
     ngrid.innerHTML = '';
-    nutrientMap.forEach(({ icon, name, value, unit }) => {
+    nutrientMap.forEach(({ icon, name, value, unit, effect }) => {
       if (value !== undefined && value !== null) {
         const chip = document.createElement('div');
         chip.className = 'nutrient-chip';
@@ -2698,6 +3021,7 @@ aiCommentには、訂正された料理（${uName || 'ユーザー'}さんの目
           <span class="nutrient-chip-icon">${icon}</span>
           <div class="nutrient-chip-name">${name}</div>
           <div class="nutrient-chip-value">${value}<span class="nutrient-chip-unit"> ${unit}</span></div>
+          <div class="nutrient-chip-effect">🩺 ${effect}</div>
         `;
         ngrid.appendChild(chip);
       }
@@ -3124,16 +3448,19 @@ aiCommentには、訂正された料理（${uName || 'ユーザー'}さんの目
     const age = this.getAge(ub.birthDate);
     const genderStr = ub.gender === 'female' ? '女性' : ub.gender === 'male' ? '男性' : 'その他';
     const uName = ub.userName ? `${ub.userName}さん` : '';
+    const heightStr = ub.height ? `${ub.height}cm` : '未設定';
+    const bmiStr = (ub.height && curW) ? `${(curW / Math.pow(ub.height / 100, 2)).toFixed(1)}` : '未計算';
 
     let mode = '維持';
     if (tarW < curW) mode = '減量';
     if (tarW > curW) mode = '増量';
 
-    const prompt = `あなたはプロの医師・管理栄養士AIです。以下のユーザーの身体情報（お名前・年齢・性別・体重・血圧）と「1日の食事記録」を総合的に分析し、医学的・栄養学的な総括アドバイスを生成してください。
+    const prompt = `あなたはプロの医師・管理栄養士AIです。以下のユーザーの身体情報（お名前・年齢・性別・身長・体重・BMI・血圧）と「1日の食事記録」を総合的に分析し、医学的・栄養学的な総括アドバイスを生成してください。
 
 【ユーザー身体・健康データ】
 ${uName ? `お名前: ${uName}\n` : ''}年齢: ${age !== null ? `${age}歳` : '未設定'}
 性別: ${genderStr}
+身長: ${heightStr} (BMI: ${bmiStr})
 現在の体重: ${curW}kg (目標: ${tarW}kg, ${mode}目標)
 現在の血圧: ${bpSys}/${bpDia} mmHg (収縮期${bpSys} / 拡張期${bpDia})
 1日の目標摂取カロリー: ${goalCal}kcal
@@ -3196,6 +3523,7 @@ ${mealsSummaryText}
   // ===== Goal Settings =====
   calculateGoalsFromWeight() {
     const nameEl = document.getElementById('user-name');
+    const heightEl = document.getElementById('user-height');
     const curWEl = document.getElementById('user-current-weight');
     const tarWEl = document.getElementById('user-target-weight');
     const actEl = document.getElementById('user-activity-level');
@@ -3206,6 +3534,7 @@ ${mealsSummaryText}
     if (!curWEl || !tarWEl || !actEl) return null;
 
     const userName = nameEl?.value?.trim() || this.state.userBody.userName || '';
+    const height = parseFloat(heightEl?.value) || this.state.userBody.height || 170;
     const currentWeight = parseFloat(curWEl.value) || 65;
     const targetWeight = parseFloat(tarWEl.value) || 60;
     const activity = actEl.value || 'moderate';
@@ -3219,6 +3548,7 @@ ${mealsSummaryText}
       userName,
       birthDate,
       gender,
+      height,
       currentWeight,
       targetWeight,
       activityLevel: activity,
@@ -3226,9 +3556,37 @@ ${mealsSummaryText}
       bloodPressureDiastolic
     };
 
-    // 1. 基礎代謝 (BMR) 算出 (性別と体重)
-    const baseMult = gender === 'female' ? 21.5 : gender === 'male' ? 24 : 22.5;
-    const bmr = currentWeight * baseMult;
+    // BMI・適正体重プレビュー
+    const heightM = height ? height / 100 : null;
+    const bmi = (heightM && currentWeight) ? (currentWeight / (heightM * heightM)).toFixed(1) : null;
+    const idealWeight = heightM ? ((heightM * heightM) * 22).toFixed(1) : null;
+
+    const bmiPreviewEl = document.getElementById('user-bmi-preview');
+    if (bmiPreviewEl) {
+      bmiPreviewEl.textContent = bmi ? `(BMI: ${bmi})` : '';
+    }
+
+    const idealPreviewEl = document.getElementById('user-ideal-weight-preview');
+    if (idealPreviewEl) {
+      idealPreviewEl.textContent = idealWeight ? `(適正: 約${idealWeight}kg)` : '';
+    }
+
+    // 1. 基礎代謝 (BMR) 算出 (Mifflin-St Jeor または 簡易体重法)
+    const age = this.getAge(birthDate) || 30;
+    let bmr = 0;
+    if (height && height > 50) {
+      if (gender === 'female') {
+        bmr = 10 * currentWeight + 6.25 * height - 5 * age - 161;
+      } else if (gender === 'male') {
+        bmr = 10 * currentWeight + 6.25 * height - 5 * age + 5;
+      } else {
+        bmr = 10 * currentWeight + 6.25 * height - 5 * age - 78;
+      }
+    } else {
+      const baseMult = gender === 'female' ? 21.5 : gender === 'male' ? 24 : 22.5;
+      bmr = currentWeight * baseMult;
+    }
+    bmr = Math.max(1000, bmr);
 
     // 2. 活動レベル乗数
     const actMultipliers = { light: 1.3, moderate: 1.5, active: 1.75 };
@@ -3291,13 +3649,14 @@ ${mealsSummaryText}
 
   renderGoals() {
     const ub = this.state.userBody || {
-      userName: '', birthDate: '', gender: 'male', currentWeight: 65, targetWeight: 60,
+      userName: '', birthDate: '', gender: 'male', height: 170, currentWeight: 65, targetWeight: 60,
       activityLevel: 'moderate', bloodPressureSystolic: 120, bloodPressureDiastolic: 80,
       routineNotes: ''
     };
     const nameEl = document.getElementById('user-name');
     const birthEl = document.getElementById('user-birthdate');
     const genderEl = document.getElementById('user-gender');
+    const heightEl = document.getElementById('user-height');
     const curWEl = document.getElementById('user-current-weight');
     const tarWEl = document.getElementById('user-target-weight');
     const actEl = document.getElementById('user-activity-level');
@@ -3313,6 +3672,7 @@ ${mealsSummaryText}
       if (preview) preview.textContent = age !== null ? `(${age}歳)` : '';
     }
     if (genderEl) genderEl.value = ub.gender || 'male';
+    if (heightEl) heightEl.value = ub.height ?? 170;
     if (curWEl) curWEl.value = ub.currentWeight ?? 65;
     if (tarWEl) tarWEl.value = ub.targetWeight ?? 60;
     if (actEl) actEl.value = ub.activityLevel || 'moderate';
@@ -3362,6 +3722,7 @@ ${mealsSummaryText}
     const userName = document.getElementById('user-name')?.value?.trim() || '';
     const birthDate = document.getElementById('user-birthdate')?.value || '';
     const gender = document.getElementById('user-gender')?.value || 'male';
+    const height = parseFloat(document.getElementById('user-height')?.value) || 170;
     const curW = parseFloat(document.getElementById('user-current-weight')?.value) || 65;
     const tarW = parseFloat(document.getElementById('user-target-weight')?.value) || 60;
     const act = document.getElementById('user-activity-level')?.value || 'moderate';
@@ -3373,6 +3734,7 @@ ${mealsSummaryText}
       userName,
       birthDate,
       gender,
+      height,
       currentWeight: curW,
       targetWeight: tarW,
       activityLevel: act,
@@ -3632,6 +3994,8 @@ ${mealsSummaryText}
       const tarW = ub.targetWeight || 60;
       const bpSys = ub.bloodPressureSystolic || 120;
       const bpDia = ub.bloodPressureDiastolic || 80;
+      const heightStr = ub.height ? `${ub.height}cm` : '未設定';
+      const bmiStr = (ub.height && curW) ? `${(curW / Math.pow(ub.height / 100, 2)).toFixed(1)}` : '未計算';
       const goalCal = this.state.goals?.calories || 1800;
       const routine = ub.routineNotes || '未設定';
 
@@ -3665,6 +4029,7 @@ ${mealsSummaryText}
 【ユーザー身体・健康データ】
 ${uName ? `- お名前: ${uName}\n` : ''}- 年齢: ${age !== null ? `${age}歳` : '未設定'}
 - 性別: ${genderStr}
+- 身長: ${heightStr} (BMI: ${bmiStr})
 - 現在の体重: ${curW}kg (目標体重: ${tarW}kg)
 - 現在の血圧: ${bpSys}/${bpDia} mmHg
 - 1日目標カロリー: ${goalCal}kcal (PFC目標: タンパク質${this.state.goals?.protein || 90}g, 脂質${this.state.goals?.fat || 45}g, 炭水化物${this.state.goals?.carbs || 220}g)

@@ -610,6 +610,170 @@ body::before {
 .pfc-label { color: var(--text-secondary); }
 .pfc-amount { font-weight: 700; color: var(--text-primary); }
 
+/* ===== Daily Cumulative Calorie Progress Card ===== */
+.daily-progress-card {
+  background: rgba(61, 255, 160, 0.05);
+  border-top: 1px solid var(--glass-border);
+  border-bottom: 1px solid var(--glass-border);
+  padding: 16px 24px;
+}
+
+.daily-progress-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 8px;
+}
+
+.daily-progress-date {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text-secondary);
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.daily-progress-stats {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-bottom: 10px;
+}
+
+.daily-stat-main {
+  display: flex;
+  align-items: baseline;
+  gap: 4px;
+}
+
+.daily-stat-label {
+  font-size: 12px;
+  color: var(--text-muted);
+}
+
+.daily-stat-val {
+  font-size: 20px;
+  font-weight: 800;
+  color: var(--accent-primary);
+}
+
+.daily-stat-slash {
+  font-size: 14px;
+  color: var(--text-muted);
+}
+
+.daily-stat-goal {
+  font-size: 13px;
+  color: var(--text-secondary);
+  font-weight: 600;
+}
+
+.daily-meal-added-badge {
+  font-size: 11px;
+  background: rgba(61, 255, 160, 0.15);
+  color: var(--accent-primary);
+  padding: 2px 6px;
+  border-radius: 4px;
+  font-weight: 600;
+  margin-left: 4px;
+}
+
+.daily-remaining-badge {
+  font-size: 12px;
+  padding: 4px 10px;
+  border-radius: 20px;
+  background: rgba(255, 255, 255, 0.06);
+  border: 1px solid var(--glass-border);
+  color: var(--text-secondary);
+}
+
+.daily-remaining-badge.badge-within {
+  background: rgba(61, 255, 160, 0.12);
+  border-color: rgba(61, 255, 160, 0.3);
+  color: var(--accent-primary);
+}
+
+.daily-remaining-badge.badge-over {
+  background: rgba(255, 77, 106, 0.12);
+  border-color: rgba(255, 77, 106, 0.3);
+  color: #ff4d6a;
+}
+
+.daily-progress-bar-wrap {
+  width: 100%;
+  height: 8px;
+  background: rgba(255, 255, 255, 0.08);
+  border-radius: 4px;
+  overflow: hidden;
+}
+
+.daily-progress-bar {
+  height: 100%;
+  background: linear-gradient(90deg, #3dffa0 0%, #00e5ff 100%);
+  border-radius: 4px;
+  transition: width 0.6s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.daily-progress-bar.bar-over {
+  background: linear-gradient(90deg, #ffb300 0%, #ff4d6a 100%);
+}
+
+/* ===== Health Benefits (体内効果) ===== */
+.health-benefits-section {
+  padding: 18px 24px;
+  border-top: 1px solid var(--glass-border);
+}
+
+.health-benefits-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.health-benefit-item {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  background: rgba(255, 255, 255, 0.03);
+  border: 1px solid var(--glass-border);
+  border-left: 3px solid var(--accent-primary);
+  border-radius: var(--radius-sm);
+  padding: 10px 14px;
+  font-size: 13px;
+  line-height: 1.45;
+  color: var(--text-primary);
+  transition: var(--transition);
+}
+
+.health-benefit-item:hover {
+  background: rgba(255, 255, 255, 0.06);
+  border-color: var(--glass-border-hover);
+}
+
+.health-benefit-icon {
+  font-size: 16px;
+  flex-shrink: 0;
+  margin-top: 1px;
+}
+
+.health-benefit-content {
+  flex: 1;
+}
+
+.health-benefit-title {
+  font-weight: 700;
+  color: var(--accent-primary);
+  margin-bottom: 2px;
+}
+
+.health-benefit-desc {
+  font-size: 12px;
+  color: var(--text-secondary);
+}
+
 /* ===== Nutrients Grid ===== */
 .nutrients-section {
   padding: 20px 24px;
@@ -625,8 +789,10 @@ body::before {
   background: var(--bg-secondary);
   border: 1px solid var(--glass-border);
   border-radius: var(--radius-sm);
-  padding: 14px 16px;
+  padding: 12px 14px;
   transition: var(--transition);
+  display: flex;
+  flex-direction: column;
 }
 
 .nutrient-chip:hover {
@@ -636,8 +802,8 @@ body::before {
 }
 
 .nutrient-chip-icon {
-  font-size: 20px;
-  margin-bottom: 8px;
+  font-size: 18px;
+  margin-bottom: 4px;
   display: block;
 }
 
@@ -647,11 +813,11 @@ body::before {
   text-transform: uppercase;
   letter-spacing: 0.8px;
   font-weight: 600;
-  margin-bottom: 4px;
+  margin-bottom: 2px;
 }
 
 .nutrient-chip-value {
-  font-size: 18px;
+  font-size: 17px;
   font-weight: 700;
   color: var(--text-primary);
 }
@@ -660,6 +826,16 @@ body::before {
   font-size: 11px;
   color: var(--text-muted);
   font-weight: 400;
+}
+
+.nutrient-chip-effect {
+  font-size: 10.5px;
+  color: var(--accent-primary);
+  background: rgba(61, 255, 160, 0.08);
+  border-radius: 4px;
+  padding: 2px 5px;
+  margin-top: 6px;
+  line-height: 1.3;
 }
 
 /* ===== Save & Action Row ===== */

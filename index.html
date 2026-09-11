@@ -22,7 +22,7 @@
       <div>
         <div style="display: flex; align-items: center; gap: 8px;">
           <div class="logo-text">NutriLens</div>
-          <span class="app-version-badge" id="app-version">v1.0.34</span>
+          <span class="app-version-badge" id="app-version">v1.0.36</span>
         </div>
         <div class="logo-subtitle">AI栄養分析</div>
       </div>
@@ -182,6 +182,31 @@
           </div>
         </div>
 
+        <!-- Calorie & Daily Cumulative Goal Progress -->
+        <div id="result-daily-progress-box" class="daily-progress-card">
+          <div class="daily-progress-header">
+            <div class="daily-progress-date">
+              <span class="icon">📅</span> <span id="result-daily-date-label">本日 (9/11) の累積カロリー</span>
+            </div>
+            <span id="result-daily-goal-mode-badge" class="badge badge-success">📉 減量目標</span>
+          </div>
+          <div class="daily-progress-stats">
+            <div class="daily-stat-main">
+              <span class="daily-stat-label">本日累計:</span>
+              <span id="result-daily-total-cal" class="daily-stat-val">0</span>
+              <span class="daily-stat-slash">/</span>
+              <span id="result-daily-goal-cal" class="daily-stat-goal">1,800 kcal</span>
+              <span id="result-meal-cal-diff-badge" class="daily-meal-added-badge">+0 kcal</span>
+            </div>
+            <div id="result-daily-remaining-badge" class="daily-remaining-badge">
+              あと <strong id="result-daily-remaining-val">0</strong> kcal
+            </div>
+          </div>
+          <div class="daily-progress-bar-wrap">
+            <div id="result-daily-progress-bar" class="daily-progress-bar" style="width: 0%;"></div>
+          </div>
+        </div>
+
         <!-- PFC Bars -->
         <div class="pfc-section">
           <div class="pfc-title">PFCバランス</div>
@@ -209,9 +234,17 @@
           </div>
         </div>
 
+        <!-- Health Benefits (体内効果・健康メリット) -->
+        <div id="result-health-benefits-section" class="health-benefits-section">
+          <div class="pfc-title" style="margin-bottom:12px;display:flex;align-items:center;gap:6px">
+            <span>🩺</span> この食事の栄養素がもたらす体内効果
+          </div>
+          <div id="result-health-benefits-list" class="health-benefits-list"></div>
+        </div>
+
         <!-- Nutrients Grid -->
         <div class="nutrients-section">
-          <div class="pfc-title" style="margin-bottom:14px">栄養素詳細</div>
+          <div class="pfc-title" style="margin-bottom:14px">栄養素詳細と身体への働き</div>
           <div class="nutrients-grid" id="nutrients-grid"></div>
         </div>
 
@@ -467,7 +500,7 @@
       <div class="section-title"><span class="icon">⚖️</span>体重＆身体目標設定</div>
       <div class="glass-card goal-card">
         <p class="goal-card-desc">
-          お名前・生年月日・性別・体重・血圧を設定すると、あなたに最適化されたカロリー・PFCおよび健康アドバイスをAIが分析します。
+          お名前・生年月日・性別・身長・体重・血圧を設定すると、あなたに最適化されたカロリー・PFCおよび健康アドバイスをAIが分析します。
         </p>
 
         <!-- User Name Input -->
@@ -492,15 +525,31 @@
           </div>
         </div>
 
-        <!-- Body Weight Inputs -->
+        <!-- Body Height & Weight Inputs -->
         <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:16px">
           <div class="form-group">
-            <label class="form-label" for="user-current-weight">⚖️ 現在の体重 (kg)</label>
-            <input type="number" class="form-input" id="user-current-weight" min="30" max="200" step="0.1" placeholder="65.0" oninput="App.calculateGoalsFromWeight()">
+            <label class="form-label" for="user-height">📏 身長 (cm)</label>
+            <input type="number" class="form-input" id="user-height" min="50" max="250" step="0.1" placeholder="170.0" oninput="App.calculateGoalsFromWeight()">
           </div>
           <div class="form-group">
-            <label class="form-label" for="user-target-weight">🎯 目標体重 (kg)</label>
+            <label class="form-label" for="user-current-weight">⚖️ 現在の体重 (kg) <span id="user-bmi-preview" style="font-size:11px;color:var(--accent-primary);margin-left:4px"></span></label>
+            <input type="number" class="form-input" id="user-current-weight" min="30" max="200" step="0.1" placeholder="65.0" oninput="App.calculateGoalsFromWeight()">
+          </div>
+        </div>
+
+        <!-- Target Weight & Activity Level Inputs -->
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:16px">
+          <div class="form-group">
+            <label class="form-label" for="user-target-weight">🎯 目標体重 (kg) <span id="user-ideal-weight-preview" style="font-size:11px;color:var(--text-muted);margin-left:4px"></span></label>
             <input type="number" class="form-input" id="user-target-weight" min="30" max="200" step="0.1" placeholder="60.0" oninput="App.calculateGoalsFromWeight()">
+          </div>
+          <div class="form-group">
+            <label class="form-label" for="user-activity-level">🏃‍♂️ 活動レベル</label>
+            <select class="form-select" id="user-activity-level" onchange="App.calculateGoalsFromWeight()">
+              <option value="light">デスクワーク中心 (低い)</option>
+              <option value="moderate" selected>通勤・立ち仕事 (普通)</option>
+              <option value="active">スポーツ習慣多 (高い)</option>
+            </select>
           </div>
         </div>
 
@@ -517,15 +566,6 @@
               <div class="form-hint">最低 / 拡張期</div>
             </div>
           </div>
-        </div>
-
-        <div class="form-group" style="margin-bottom:16px">
-          <label class="form-label" for="user-activity-level">🏃‍♂️ 日常の活動レベル</label>
-          <select class="form-select" id="user-activity-level" onchange="App.calculateGoalsFromWeight()">
-            <option value="light">デスクワーク中心・あまり動かない (低い)</option>
-            <option value="moderate" selected>立ち仕事・通勤で歩く (普通)</option>
-            <option value="active">スポーツ習慣・立ち仕事が多い (高い)</option>
-          </select>
         </div>
 
         <!-- Routine & Special Notes for AI Analysis -->
@@ -720,12 +760,37 @@
         </div>
       </div>
 
-      <!-- Calorie highlight -->
-      <div class="glass-card" style="padding:16px 20px;margin-bottom:14px;display:flex;align-items:center;gap:12px">
-        <div style="font-size:36px">🔥</div>
-        <div>
-          <div style="font-size:12px;color:var(--text-muted);text-transform:uppercase;letter-spacing:1px;font-weight:600">カロリー</div>
-          <div style="font-size:36px;font-weight:800;color:var(--accent-primary);line-height:1"><span id="detail-calories">0</span><span style="font-size:14px;color:var(--text-muted);font-weight:400;margin-left:4px">kcal</span></div>
+      <!-- Calorie highlight & Daily cumulative progress -->
+      <div class="glass-card" style="padding:16px 20px;margin-bottom:14px">
+        <div style="display:flex;align-items:center;gap:12px;margin-bottom:12px">
+          <div style="font-size:36px">🔥</div>
+          <div>
+            <div style="font-size:12px;color:var(--text-muted);text-transform:uppercase;letter-spacing:1px;font-weight:600">この食事のカロリー</div>
+            <div style="font-size:32px;font-weight:800;color:var(--accent-primary);line-height:1"><span id="detail-calories">0</span><span style="font-size:14px;color:var(--text-muted);font-weight:400;margin-left:4px">kcal</span></div>
+          </div>
+        </div>
+        <!-- Daily Progress in Modal -->
+        <div id="detail-daily-progress-box" class="daily-progress-card" style="margin-top:10px;background:rgba(255,255,255,0.03);border:1px solid var(--glass-border);">
+          <div class="daily-progress-header">
+            <div class="daily-progress-date">
+              <span class="icon">📅</span> <span id="detail-daily-date-label">この日の累積カロリー</span>
+            </div>
+            <span id="detail-daily-goal-mode-badge" class="badge badge-success">目標進捗</span>
+          </div>
+          <div class="daily-progress-stats">
+            <div class="daily-stat-main">
+              <span class="daily-stat-label">当日合計:</span>
+              <span id="detail-daily-total-cal" class="daily-stat-val">0</span>
+              <span class="daily-stat-slash">/</span>
+              <span id="detail-daily-goal-cal" class="daily-stat-goal">1,800 kcal</span>
+            </div>
+            <div id="detail-daily-remaining-badge" class="daily-remaining-badge">
+              あと <strong id="detail-daily-remaining-val">0</strong> kcal
+            </div>
+          </div>
+          <div class="daily-progress-bar-wrap">
+            <div id="detail-daily-progress-bar" class="daily-progress-bar" style="width: 0%;"></div>
+          </div>
         </div>
       </div>
 
@@ -756,9 +821,17 @@
         </div>
       </div>
 
+      <!-- Health Benefits (体内効果・健康メリット) -->
+      <div id="detail-health-benefits-section" class="glass-card health-benefits-section" style="padding:16px 20px;margin-bottom:14px">
+        <div class="pfc-title" style="margin-bottom:12px;display:flex;align-items:center;gap:6px">
+          <span>🩺</span> この食事の栄養素がもたらす体内効果
+        </div>
+        <div id="detail-health-benefits-list" class="health-benefits-list"></div>
+      </div>
+
       <!-- Nutrients -->
       <div class="glass-card" style="padding:16px 20px;margin-bottom:14px">
-        <div class="pfc-title" style="margin-bottom:12px">栄養素詳細</div>
+        <div class="pfc-title" style="margin-bottom:12px">栄養素詳細と身体への働き</div>
         <div class="nutrients-grid" id="detail-nutrients-grid"></div>
       </div>
 
