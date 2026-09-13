@@ -2,7 +2,7 @@
 
 const App = {
   // Version
-  version: 'v1.0.38',
+  version: 'v1.0.39',
 
   // OS & Health App Detection
   getHealthAppInfo() {
