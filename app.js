@@ -2,7 +2,7 @@
 
 const App = {
   // Version
-  version: 'v1.0.37',
+  version: 'v1.0.38',
 
   // OS & Health App Detection
   getHealthAppInfo() {
@@ -504,6 +504,10 @@ const App = {
     document.getElementById('btn-save-api').addEventListener('click', () => this.saveApiKey());
     document.getElementById('btn-cancel-api').addEventListener('click', () => this.closeApiModal());
     document.getElementById('btn-toggle-key').addEventListener('click', () => this.toggleApiKeyVisibility());
+    const btnTestApi = document.getElementById('btn-test-api');
+    if (btnTestApi) {
+      btnTestApi.addEventListener('click', () => this.testApiKeyConnection());
+    }
 
     // API key input - enter to save
     document.getElementById('api-key-input').addEventListener('keydown', (e) => {
@@ -1056,27 +1060,33 @@ const App = {
     }
   },
 
+  cleanApiKey(rawKey) {
+    if (!rawKey || typeof rawKey !== 'string') return '';
+    return rawKey.replace(/[\s\r\n\t'"｀`]/g, '').trim();
+  },
+
   _cachedModels: null,
 
   async getAvailableModels(apiKey, force = false) {
+    const cleanedKey = this.cleanApiKey(apiKey || this.state.apiKey);
+    if (!cleanedKey) return null;
+
     if (!force && this._cachedModels && this._cachedModels.length > 0) {
       return this._cachedModels;
     }
     try {
       const response = await fetch(
-        `https://generativelanguage.googleapis.com/v1beta/models?key=${apiKey}`
+        `https://generativelanguage.googleapis.com/v1beta/models?key=${cleanedKey}`
       );
-      if (!response.ok) return null;
-      const resText = await response.text();
-      let data;
-      try {
-        data = JSON.parse(resText);
-      } catch (e) {
+      if (!response.ok) {
+        const errorText = await response.text().catch(() => '');
+        console.warn(`Geminiモデルリスト取得HTTPエラー (${response.status}):`, errorText);
         return null;
       }
+      const data = await response.json();
       if (!data.models || !Array.isArray(data.models)) return null;
 
-      // generateContent をサポートし、tts/embedding/audio等の非Vision・特殊モデルを除外
+      // generateContent をサポートし、不要な特殊モデルを除外
       const available = data.models
         .filter(m => {
           if (!m.supportedGenerationMethods || !m.supportedGenerationMethods.includes('generateContent')) {
@@ -1092,7 +1102,9 @@ const App = {
         })
         .map(m => m.name.replace(/^models\//, ''));
 
-      this._cachedModels = available;
+      if (available && available.length > 0) {
+        this._cachedModels = available;
+      }
       return available;
     } catch (e) {
       console.warn('Geminiモデルリスト取得失敗:', e);
@@ -1101,39 +1113,55 @@ const App = {
   },
 
   async executeGeminiGenerate({ prompt, base64Image = null, mimeType = 'image/jpeg', temperature = 0.1, isJson = true }) {
-    // 高速・安定推奨モデル順（Gemini 2.5 Flash -> 2.0 Flash -> 2.0 Flash Lite -> 1.5 Flash -> 2.5 Pro）
-    const preferredOrder = [
-      'gemini-2.5-flash',
+    const apiKey = this.cleanApiKey(this.state.apiKey);
+    if (!apiKey) {
+      throw new Error('APIキーが設定されていません。画面上部の「設定」からGemini APIキーを入力してください。');
+    }
+
+    // 安定・高精度な現行公式モデル順
+    const preferredCandidates = [
       'gemini-2.0-flash',
       'gemini-2.0-flash-lite',
       'gemini-1.5-flash',
-      'gemini-1.5-flash-latest',
-      'gemini-2.5-pro',
       'gemini-1.5-pro'
     ];
 
+    // 利用可能なモデル一覧を動的に取得・確認
+    let availableModels = this._cachedModels;
+    if (!availableModels || availableModels.length === 0) {
+      availableModels = await this.getAvailableModels(apiKey);
+    }
+
     let modelsToTry = [];
 
-    // 1. ユーザーが特定のモデルを明示選択している場合、最優先
+    // 1. ユーザーが手動でモデル指定している場合
     if (this.state.selectedModel && this.state.selectedModel !== 'auto') {
       modelsToTry.push(this.state.selectedModel);
     }
 
-    // 2. 直近で正常動作した最速モデルがあれば優先
+    // 2. 直近で成功したモデルがあれば最優先
     if (this.state.lastWorkingModel && !modelsToTry.includes(this.state.lastWorkingModel)) {
       modelsToTry.push(this.state.lastWorkingModel);
     }
 
-    // 3. 高速推奨モデル順
-    preferredOrder.forEach(m => {
-      if (!modelsToTry.includes(m)) {
-        modelsToTry.push(m);
-      }
-    });
-
-    // 4. キャッシュされた利用可能モデルから追加（同期的にある場合のみ）
-    if (this._cachedModels && this._cachedModels.length > 0) {
-      this._cachedModels.forEach(m => {
+    // 3. APIキーで実際に利用可能なモデル一覧から優先マッチング
+    if (availableModels && availableModels.length > 0) {
+      // preferredCandidates に合致するものを優先追加
+      preferredCandidates.forEach(cand => {
+        const found = availableModels.find(m => m === cand || m.startsWith(cand));
+        if (found && !modelsToTry.includes(found)) {
+          modelsToTry.push(found);
+        }
+      });
+      // その他の利用可能モデルを追加
+      availableModels.forEach(m => {
+        if (!modelsToTry.includes(m)) {
+          modelsToTry.push(m);
+        }
+      });
+    } else {
+      // リスト取得できなかった場合のフォールバック順
+      preferredCandidates.forEach(m => {
         if (!modelsToTry.includes(m)) {
           modelsToTry.push(m);
         }
@@ -1141,6 +1169,7 @@ const App = {
     }
 
     let lastError = null;
+    let isApiKeyInvalid = false;
     const attemptedModels = [];
 
     // parts構築
@@ -1157,9 +1186,9 @@ const App = {
     for (const modelName of modelsToTry) {
       attemptedModels.push(modelName);
 
-      // 高速化の要：Gemini 2.5系等の思考（Thinking）モードを無効化し、思考待機時間をゼロにして即時応答させる
+      // 高速化：思考（Thinking）モードの最適化（対応モデルは思考0秒、非対応は通常実行）
       const tryPayloads = [
-        // パターンA: thinkingBudget = 0 で超高速生成（Gemini 2.5 Flash / 2.5 Pro等）
+        // パターンA: thinkingBudget = 0
         {
           contents: [{ parts }],
           generationConfig: {
@@ -1170,7 +1199,7 @@ const App = {
             }
           }
         },
-        // パターンB: thinkingConfig非対応モデル（Gemini 2.0 / 1.5等）用のフォールバック
+        // パターンB: 通常設定
         {
           contents: [{ parts }],
           generationConfig: {
@@ -1183,11 +1212,11 @@ const App = {
       for (let pIdx = 0; pIdx < tryPayloads.length; pIdx++) {
         const payload = tryPayloads[pIdx];
         const controller = new AbortController();
-        const timeoutId = setTimeout(() => controller.abort(), 15000); // 15秒タイムアウト
+        const timeoutId = setTimeout(() => controller.abort(), 18000); // 18秒タイムアウト
 
         try {
           const response = await fetch(
-            `https://generativelanguage.googleapis.com/v1beta/models/${modelName}:generateContent?key=${this.state.apiKey}`,
+            `https://generativelanguage.googleapis.com/v1beta/models/${modelName}:generateContent?key=${apiKey}`,
             {
               method: 'POST',
               headers: { 'Content-Type': 'application/json' },
@@ -1205,18 +1234,24 @@ const App = {
             try {
               const errJson = JSON.parse(resText);
               msg = errJson?.error?.message || msg;
+              const errStatus = errJson?.error?.status || '';
               if (msg.includes('thinkingConfig') || msg.includes('thinking_budget') || msg.includes('Unknown field')) {
                 isThinkingConfigError = true;
               }
+              if (response.status === 400 && (msg.includes('API key not valid') || msg.includes('API_KEY_INVALID'))) {
+                isApiKeyInvalid = true;
+              }
+              if (response.status === 403 || errStatus === 'PERMISSION_DENIED') {
+                isApiKeyInvalid = true;
+              }
             } catch (e) {}
 
-            // thinkingConfigが未対応でエラーになった場合は、直ちにパターンB（thinkingConfigなし）で即再試行
+            // thinkingConfigが未対応の場合は、即座にパターンBで再試行
             if (isThinkingConfigError && pIdx === 0) {
-              console.log(`モデル [${modelName}] はthinkingConfig非対応のため、標準設定で再試行します...`);
               continue;
             }
 
-            console.warn(`Geminiモデル [${modelName}] 利用不可 (${msg})。フォールバックを試みます...`);
+            console.warn(`Geminiモデル [${modelName}] 利用不可 (${msg})。フォールバック中...`);
             lastError = new Error(`モデル [${modelName}]: ${msg}`);
             break; // 次のモデルへ
           }
@@ -1225,19 +1260,19 @@ const App = {
           try {
             data = JSON.parse(resText);
           } catch (e) {
-            console.warn(`モデル [${modelName}] レスポンスJSONパース失敗。フォールバックを試みます...`);
+            console.warn(`モデル [${modelName}] レスポンスJSONパース失敗。フォールバック中...`);
             lastError = new Error(`モデル [${modelName}] レスポンス形式エラー`);
             break;
           }
 
           const text = data.candidates?.[0]?.content?.parts?.[0]?.text;
           if (!text) {
-            console.warn(`モデル [${modelName}] からテキスト取得失敗。フォールバックを試みます...`);
+            console.warn(`モデル [${modelName}] からテキスト取得失敗。フォールバック中...`);
             lastError = new Error(`モデル [${modelName}]: テキスト取得失敗`);
             break;
           }
 
-          // 成功したモデルを記録・キャッシュして次回以降直行させる
+          // 成功したモデルを記録・キャッシュ
           if (this.state.lastWorkingModel !== modelName) {
             this.state.lastWorkingModel = modelName;
             this.saveToStorage().catch(() => {});
@@ -1263,11 +1298,19 @@ const App = {
 
         } catch (err) {
           clearTimeout(timeoutId);
-          console.warn(`モデル [${modelName}] 呼び出し例外:`, err.name === 'AbortError' ? 'タイムアウト(15秒)' : err.message);
+          console.warn(`モデル [${modelName}] 呼び出し例外:`, err.name === 'AbortError' ? 'タイムアウト(18秒)' : err.message);
           lastError = err;
           break; // 次のモデルへ
         }
       }
+    }
+
+    if (isApiKeyInvalid) {
+      throw new Error('APIキーが無効またはGemini APIの利用権限がありません。Google AI Studioで有効なAPIキーをご確認ください。');
+    }
+
+    if (lastError && lastError.message && lastError.message.includes('not found for API version')) {
+      throw new Error('指定されたモデルが見つからないか、APIキーがGoogle AI Studioで有効化されていません。API設定をご確認ください。');
     }
 
     throw lastError || new Error(`利用可能なGeminiモデルが見つかりませんでした (試行: ${attemptedModels.slice(0, 3).join(', ')})`);
@@ -4013,6 +4056,8 @@ ${mealsSummaryText}
     const input = document.getElementById('api-key-input');
     input.value = this.state.apiKey;
     input.type = 'password';
+    const statusEl = document.getElementById('api-test-status');
+    if (statusEl) statusEl.textContent = '';
     const modelSelect = document.getElementById('api-model-select');
     if (modelSelect) {
       modelSelect.value = this.state.selectedModel || 'auto';
@@ -4027,8 +4072,42 @@ ${mealsSummaryText}
     document.getElementById('api-modal').classList.remove('active');
   },
 
+  async testApiKeyConnection() {
+    const rawKey = document.getElementById('api-key-input')?.value;
+    const cleanedKey = this.cleanApiKey(rawKey);
+    const statusEl = document.getElementById('api-test-status');
+    const testBtn = document.getElementById('btn-test-api');
+    
+    if (!cleanedKey) {
+      if (statusEl) statusEl.innerHTML = '<span style="color:var(--danger)">⚠️ キーを入力してください</span>';
+      this.showToast('APIキーを入力してください', 'error');
+      return;
+    }
+
+    if (testBtn) testBtn.disabled = true;
+    if (statusEl) statusEl.innerHTML = '<span style="color:var(--text-muted)">⏳ 接続テスト中...</span>';
+
+    try {
+      const models = await this.getAvailableModels(cleanedKey, true);
+      if (models && models.length > 0) {
+        const topModels = models.slice(0, 3).join(', ');
+        if (statusEl) statusEl.innerHTML = `<span style="color:var(--success)">✅ 接続成功 (${models.length}個のモデル利用可)</span>`;
+        this.showToast(`API接続成功！利用可能モデル: ${topModels}`, 'success');
+      } else {
+        if (statusEl) statusEl.innerHTML = '<span style="color:var(--danger)">❌ 接続失敗: APIキーが無効か権限がありません</span>';
+        this.showToast('APIキーが無効またはGenerative Language APIが有効化されていません', 'error');
+      }
+    } catch (err) {
+      if (statusEl) statusEl.innerHTML = `<span style="color:var(--danger)">❌ エラー: ${err.message}</span>`;
+      this.showToast(`接続エラー: ${err.message}`, 'error');
+    } finally {
+      if (testBtn) testBtn.disabled = false;
+    }
+  },
+
   async saveApiKey() {
-    const key = document.getElementById('api-key-input').value.trim();
+    const rawKey = document.getElementById('api-key-input').value;
+    const key = this.cleanApiKey(rawKey);
     if (!key) {
       this.showToast('APIキーを入力してください', 'error');
       return;

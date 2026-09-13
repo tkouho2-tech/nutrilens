@@ -22,7 +22,7 @@
       <div>
         <div style="display: flex; align-items: center; gap: 8px;">
           <div class="logo-text">NutriLens</div>
-          <span class="app-version-badge" id="app-version">v1.0.37</span>
+          <span class="app-version-badge" id="app-version">v1.0.38</span>
         </div>
         <div class="logo-subtitle">AI栄養分析</div>
       </div>
@@ -1085,19 +1085,23 @@
     <div class="form-group" style="margin-top:14px">
       <label class="form-label" for="api-model-select">使用AIモデル</label>
       <select class="form-select" id="api-model-select">
-        <option value="auto">⚡ 自動最速モード（推奨 / 最適・最速モデルを自動選択）</option>
-        <option value="gemini-2.5-flash">⚡ Gemini 2.5 Flash（超高速・高精度）</option>
-        <option value="gemini-2.0-flash">⚡ Gemini 2.0 Flash（高速安定）</option>
-        <option value="gemini-2.0-flash-lite">⚡ Gemini 2.0 Flash Lite（超軽量・爆速）</option>
-        <option value="gemini-2.5-pro">💎 Gemini 2.5 Pro（高精度重視）</option>
-        <option value="gemini-1.5-flash">Gemini 1.5 Flash</option>
-        <option value="gemini-1.5-pro">Gemini 1.5 Pro</option>
+        <option value="auto">⚡ 自動最速モード（推奨 / 最適モデルを自動選択）</option>
+        <option value="gemini-2.0-flash">⚡ Gemini 2.0 Flash（超高速・高精度 推奨）</option>
+        <option value="gemini-2.0-flash-lite">⚡ Gemini 2.0 Flash Lite（爆速・軽量）</option>
+        <option value="gemini-1.5-flash">⚡ Gemini 1.5 Flash（高速・安定）</option>
+        <option value="gemini-1.5-pro">💎 Gemini 1.5 Pro（詳細・高精度）</option>
       </select>
       <div style="font-size:11px;color:var(--text-muted);margin-top:6px;line-height:1.4">
-        ※ 思考（Thinking）を最適化し、iPhoneやモバイル回線でも1〜2秒台の超高速分析を行います。
+        ※ 思考（Thinking）待機を最適化し、iPhoneやモバイル回線でも1〜2秒台の超高速分析を行います。
       </div>
     </div>
-    <div class="modal-actions">
+    <div style="margin-top:12px; display:flex; align-items:center; justify-content:space-between; gap:8px;">
+      <button class="btn btn-ghost" id="btn-test-api" type="button" style="font-size:12px; padding:6px 12px; border:1px solid rgba(255,255,255,0.15);">
+        🔍 APIキー接続テスト
+      </button>
+      <span id="api-test-status" style="font-size:11px; color:var(--text-muted); flex:1; text-align:right;"></span>
+    </div>
+    <div class="modal-actions" style="margin-top:16px;">
       <button class="btn btn-primary" id="btn-save-api" style="flex:1">保存する</button>
       <button class="btn btn-ghost" id="btn-cancel-api">キャンセル</button>
     </div>
